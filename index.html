@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Sistema Web NFS-e Padrão Nacional — Emissão, Consulta e Gestão de Notas Fiscais de Serviço Eletrônica conforme ADN (Ambiente de Dados Nacional). Suporte a IBS/CBS — Reforma Tributária.">
+  <title>NFS-e Antigravity — Sistema Nacional</title>
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="src/css/design-system.css">
+  <link rel="stylesheet" href="src/css/layout.css">
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
+</head>
+<body>
+  <div class="app-shell" id="app-shell">
+
+    <!-- ─── Sidebar ──────────────────────────────────── -->
+    <aside class="sidebar" id="sidebar">
+      <!-- Brand -->
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-logo">N</div>
+        <div class="sidebar-brand-text">
+          <div class="sidebar-brand-name">NFS-e</div>
+          <div class="sidebar-brand-sub">Antigravity ADN</div>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="sidebar-nav">
+        <div class="sidebar-section-label">Principal</div>
+
+        <button class="nav-item active" data-route="/dashboard" id="nav-dashboard">
+          <span class="nav-item-icon">📊</span>
+          <span class="nav-item-text">Dashboard</span>
+        </button>
+
+        <button class="nav-item" data-route="/emissao-dps" id="nav-emissao-dps">
+          <span class="nav-item-icon">📝</span>
+          <span class="nav-item-text">Emissão de DPS</span>
+          <span class="nav-item-badge">Nova</span>
+        </button>
+
+        <button class="nav-item" data-route="/consulta-nfse" id="nav-consulta-nfse">
+          <span class="nav-item-icon">🔍</span>
+          <span class="nav-item-text">Consulta NFS-e</span>
+        </button>
+
+        <button class="nav-item" data-route="/eventos" id="nav-eventos">
+          <span class="nav-item-icon">📋</span>
+          <span class="nav-item-text">Eventos</span>
+        </button>
+
+        <div class="sidebar-section-label">Avançado</div>
+
+        <button class="nav-item" data-route="/decisao-judicial" id="nav-decisao-judicial">
+          <span class="nav-item-icon">⚖️</span>
+          <span class="nav-item-text">Decisão Judicial</span>
+        </button>
+
+        <button class="nav-item" data-route="/adn" id="nav-adn">
+          <span class="nav-item-icon">📦</span>
+          <span class="nav-item-text">Integração ADN</span>
+          <span class="nav-item-badge" style="background: var(--color-accent-500);">NSU</span>
+        </button>
+
+        <button class="nav-item" data-route="/parametros" id="nav-parametros">
+          <span class="nav-item-icon">🏛️</span>
+          <span class="nav-item-text">Parâmetros Municipais</span>
+        </button>
+
+        <div class="sidebar-section-label">Sistema</div>
+
+        <button class="nav-item" data-route="/configuracoes" id="nav-configuracoes">
+          <span class="nav-item-icon">⚙️</span>
+          <span class="nav-item-text">Configurações</span>
+        </button>
+      </nav>
+
+      <!-- Footer -->
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="sidebar-user-avatar">CA</div>
+          <div class="sidebar-user-info">
+            <div class="sidebar-user-name">Claudio Admin</div>
+            <div class="sidebar-user-role">Administrador</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ─── Header ──────────────────────────────────── -->
+    <header class="header" id="header">
+      <div class="header-left">
+        <button class="header-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
+          ☰
+        </button>
+        <div class="header-breadcrumb">
+          NFS-e Antigravity / <span>Dashboard</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <span class="header-env-badge" id="env-badge">⚡ Sandbox</span>
+        <div class="header-search">
+          <span class="header-search-icon">🔍</span>
+          <input type="text" placeholder="Buscar chave de acesso..." aria-label="Buscar NFS-e" id="global-search">
+        </div>
+        <button class="btn btn-ghost btn-icon header-notification" aria-label="Notificações" id="btn-notifications">
+          🔔
+          <span class="notif-dot"></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ─── Main Content ────────────────────────────── -->
+    <main class="main-content" id="main-content">
+      <!-- Pages rendered here by router -->
+    </main>
+  </div>
+
+  <!-- Application Script -->
+  <script type="module" src="src/js/app.js"></script>
+</body>
+</html>
