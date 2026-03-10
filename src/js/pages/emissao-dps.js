@@ -27,13 +27,15 @@ export function renderEmissaoDPS(container) {
     </div>
 
     <!-- Tabs -->
-    <div class="tabs mb-6" id="dps-tabs">
+    <div class="tabs mb-6" id="dps-tabs" style="flex-wrap: wrap;">
       <button class="tab active" data-tab="tab-identificacao">Identificação</button>
       <button class="tab" data-tab="tab-prestador">Prestador</button>
       <button class="tab" data-tab="tab-tomador">Tomador</button>
+      <button class="tab" data-tab="tab-intermediario">Intermediário</button>
       <button class="tab" data-tab="tab-servico">Serviço</button>
       <button class="tab" data-tab="tab-valores">Valores</button>
       <button class="tab" data-tab="tab-ibscbs">IBS/CBS</button>
+      <button class="tab" data-tab="tab-complementos">Complementos</button>
       <button class="tab" data-tab="tab-resumo">Resumo</button>
     </div>
 
@@ -265,6 +267,50 @@ export function renderEmissaoDPS(container) {
       </div>
     </div>
 
+    <!-- TAB: Intermediário -->
+    <div class="card animate-slide-up tab-content hidden" id="tab-intermediario">
+      <div class="card-header">
+        <h3 class="card-title">
+          <span class="section-title" style="margin:0; padding:0; border:0; font-size: inherit;">
+            <span class="icon">🤝</span>Intermediário (Opcional)
+          </span>
+        </h3>
+      </div>
+      <div class="card-body">
+        <div style="padding: var(--space-3) var(--space-4); background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.15); border-radius: var(--radius-lg); margin-bottom: var(--space-6); font-size: var(--text-sm); color: var(--color-primary-400);">
+          ℹ️ Preencha apenas quando houver um intermediário na operação. O intermediário é um ator da NFS-e com direitos de consulta e manifestação.
+        </div>
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">Tipo de Documento</label>
+            <select class="form-select" id="inter-tipoDoc">
+              <option value="">Não informar</option>
+              <option value="CNPJ">CNPJ</option>
+              <option value="CPF">CPF</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">CNPJ/CPF</label>
+            <input class="form-input form-input-mono" id="inter-doc" type="text">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Inscrição Municipal</label>
+            <input class="form-input form-input-mono" id="inter-IM" type="text" maxlength="15">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="grid-column: span 2;">
+            <label class="form-label">Razão Social / Nome</label>
+            <input class="form-input" id="inter-xNome" type="text" maxlength="150">
+          </div>
+          <div class="form-group">
+            <label class="form-label">E-mail</label>
+            <input class="form-input" id="inter-email" type="email" maxlength="80">
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- TAB: Serviço -->
     <div class="card animate-slide-up tab-content hidden" id="tab-servico">
       <div class="card-header">
@@ -369,12 +415,7 @@ export function renderEmissaoDPS(container) {
           <div class="form-group">
             <label class="form-label">CST PIS/COFINS</label>
             <select class="form-select" id="val-CSTPC">
-              <option value="01">01 — Tributável (alíquota básica)</option>
-              <option value="06">06 — Tributável (alíquota zero)</option>
-              <option value="07">07 — Isenta</option>
-              <option value="08">08 — Sem incidência</option>
-              <option value="09">09 — Com suspensão</option>
-              <option value="99">99 — Outras operações</option>
+              ${Object.entries(ENUMS.cstPisCofins).map(([k, v]) => `<option value="${k}">${k} — ${v}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
@@ -486,6 +527,28 @@ export function renderEmissaoDPS(container) {
           </div>
         </div>
 
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">Tipo Ente Governamental (tpEnteGov)</label>
+            <select class="form-select" id="ibs-tpEnteGov">
+              <option value="">(não se aplica)</option>
+              ${Object.entries(ENUMS.tpEnteGov).map(([k, v]) => `<option value="${k}">${k} — ${v}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Doação (indDoacao)</label>
+            <select class="form-select" id="ibs-indDoacao">
+              <option value="">(não informar)</option>
+              ${Object.entries(ENUMS.indDoacao).map(([k, v]) => `<option value="${k}">${k} — ${v}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Redutor % (pRedutor)</label>
+            <input class="form-input form-input-mono" id="ibs-pRedutor" type="text" placeholder="0,0000">
+            <span class="form-help">Compra governamental</span>
+          </div>
+        </div>
+
         <div class="section-title" style="margin-top: var(--space-6);">
           <span class="icon">📊</span>Tributação IBS/CBS
         </div>
@@ -493,7 +556,9 @@ export function renderEmissaoDPS(container) {
         <div class="form-row mb-4">
           <div class="form-group">
             <label class="form-label">CST IBS/CBS <span class="required">*</span></label>
-            <input class="form-input form-input-mono" id="ibs-CST" type="text" maxlength="3" placeholder="000">
+            <select class="form-select form-input-mono" id="ibs-CST">
+              ${Object.entries(ENUMS.cstIBSCBS).map(([k, v]) => `<option value="${k}">${k} — ${v}</option>`).join('')}
+            </select>
           </div>
           <div class="form-group">
             <label class="form-label">Classificação Tributária (cClassTrib) <span class="required">*</span></label>
@@ -502,6 +567,69 @@ export function renderEmissaoDPS(container) {
           <div class="form-group">
             <label class="form-label">Crédito Presumido (cCredPres)</label>
             <input class="form-input form-input-mono" id="ibs-cCredPres" type="text" maxlength="2">
+          </div>
+        </div>
+
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">CSTReg (Trib. Regular)</label>
+            <input class="form-input form-input-mono" id="ibs-CSTReg" type="text" maxlength="3" placeholder="000">
+            <span class="form-help">gTribRegular — Apenas se diferir da trib. principal</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">cClassTribReg</label>
+            <input class="form-input form-input-mono" id="ibs-cClassTribReg" type="text" maxlength="6" placeholder="000000">
+          </div>
+          <div class="form-group">
+            <label class="form-label">% Red. Alíq. UF (pRedAliqUF)</label>
+            <input class="form-input form-input-mono" id="ibs-pRedAliqUF" type="text" placeholder="0,0000">
+          </div>
+        </div>
+
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">% Red. Alíq. Mun. (pRedAliqMun)</label>
+            <input class="form-input form-input-mono" id="ibs-pRedAliqMun" type="text" placeholder="0,0000">
+          </div>
+          <div class="form-group">
+            <label class="form-label">% Red. Alíq. CBS (pRedAliqCBS)</label>
+            <input class="form-input form-input-mono" id="ibs-pRedAliqCBS" type="text" placeholder="0,0000">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size: var(--text-xs);">ℹ️ NFS-e Referenciadas, Destinatário, Imóvel, Deduções</label>
+            <span class="form-help">Use a aba <strong>Complementos</strong> para esses subgrupos</span>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top: var(--space-4);">
+          <span class="icon">📐</span>Diferimento (gDif)
+        </div>
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">% Dif. IBS UF (pDifUF)</label>
+            <input class="form-input form-input-mono" id="ibs-pDifUF" type="text" placeholder="0,0000">
+          </div>
+          <div class="form-group">
+            <label class="form-label">% Dif. IBS Mun (pDifMun)</label>
+            <input class="form-input form-input-mono" id="ibs-pDifMun" type="text" placeholder="0,0000">
+          </div>
+          <div class="form-group">
+            <label class="form-label">% Dif. CBS (pDifCBS)</label>
+            <input class="form-input form-input-mono" id="ibs-pDifCBS" type="text" placeholder="0,0000">
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top: var(--space-4);">
+          <span class="icon">↩️</span>Estornos de Crédito (gEstornoCred)
+        </div>
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">Valor Estorno IBS (vIBSEstCred)</label>
+            <input class="form-input form-input-mono" id="ibs-vIBSEstCred" type="text" placeholder="0,00">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Valor Estorno CBS (vCBSEstCred)</label>
+            <input class="form-input form-input-mono" id="ibs-vCBSEstCred" type="text" placeholder="0,00">
           </div>
         </div>
 
@@ -523,6 +651,187 @@ export function renderEmissaoDPS(container) {
             <div id="calc-vCBS" style="font-size: var(--text-xl); font-weight: 700; color: var(--color-accent-400); font-family: var(--font-mono);">R$ 0,00</div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- TAB: Complementos IBSCBS -->
+    <div class="card animate-slide-up tab-content hidden" id="tab-complementos">
+      <div class="card-header">
+        <h3 class="card-title">
+          <span class="section-title" style="margin:0; padding:0; border:0; font-size: inherit;">
+            <span class="icon">📦</span>Complementos IBSCBS
+          </span>
+        </h3>
+      </div>
+      <div class="card-body">
+
+        <!-- NFS-e Referenciadas -->
+        <div class="section-title">
+          <span class="icon">🔗</span>NFS-e Referenciadas (gRefNFSe) <span style="font-weight: 400; font-size: var(--text-xs); color: var(--color-neutral-500);">Até 99 referências</span>
+        </div>
+        <div id="ref-nfse-list" style="margin-bottom: var(--space-3);"></div>
+        <button class="btn btn-ghost btn-sm" id="btn-add-ref-nfse">＋ Adicionar NFS-e Referenciada</button>
+
+        <!-- Pagamento Antecipado -->
+        <div class="section-title" style="margin-top: var(--space-6);">
+          <span class="icon">💳</span>Pagamento Antecipado (gPagAntecipado) <span style="font-weight: 400; font-size: var(--text-xs); color: var(--color-neutral-500);">Até 99 referências</span>
+        </div>
+        <div id="pag-antecipado-list" style="margin-bottom: var(--space-3);"></div>
+        <button class="btn btn-ghost btn-sm" id="btn-add-pag-antecipado">＋ Adicionar NFS-e Pag. Antecipado</button>
+
+        <!-- Destinatário -->
+        <div class="section-title" style="margin-top: var(--space-6);">
+          <span class="icon">👤</span>Destinatário (dest) <span style="font-weight: 400; font-size: var(--text-xs); color: var(--color-neutral-500);">Quando indDest = 1</span>
+        </div>
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">Tipo Documento</label>
+            <select class="form-select" id="dest-tipoDoc">
+              <option value="">Não informar</option>
+              <option value="CNPJ">CNPJ</option>
+              <option value="CPF">CPF</option>
+              <option value="NIF">NIF (Exterior)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Documento</label>
+            <input class="form-input form-input-mono" id="dest-doc" type="text">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Motivo s/ NIF (cNaoNIF)</label>
+            <select class="form-select" id="dest-cNaoNIF">
+              <option value="">(n/a)</option>
+              ${Object.entries(ENUMS.cNaoNIF).map(([k, v]) => `<option value="${k}">${k} — ${v}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="form-row mb-4">
+          <div class="form-group" style="grid-column: span 2;">
+            <label class="form-label">Nome / Razão Social</label>
+            <input class="form-input" id="dest-xNome" type="text" maxlength="150">
+          </div>
+          <div class="form-group">
+            <label class="form-label">E-mail</label>
+            <input class="form-input" id="dest-email" type="email" maxlength="80">
+          </div>
+        </div>
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">CEP</label>
+            <input class="form-input form-input-mono" id="dest-CEP" type="text" maxlength="9">
+          </div>
+          <div class="form-group" style="grid-column: span 2;">
+            <label class="form-label">Logradouro</label>
+            <input class="form-input" id="dest-xLgr" type="text" maxlength="255">
+          </div>
+        </div>
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">Número</label>
+            <input class="form-input" id="dest-nro" type="text" maxlength="60">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Complemento</label>
+            <input class="form-input" id="dest-xCpl" type="text" maxlength="156">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Bairro</label>
+            <input class="form-input" id="dest-xBairro" type="text" maxlength="60">
+          </div>
+        </div>
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">Município (IBGE)</label>
+            <input class="form-input form-input-mono" id="dest-cMun" type="text" maxlength="7">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Telefone</label>
+            <input class="form-input form-input-mono" id="dest-fone" type="text" maxlength="20">
+          </div>
+          <div class="form-group">
+            <label class="form-label">País (ISO) — se exterior</label>
+            <input class="form-input form-input-mono" id="dest-cPais" type="text" maxlength="2" placeholder="BR">
+          </div>
+        </div>
+        <div class="form-row mb-4" id="dest-exterior-fields" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">Cód. Postal Exterior</label>
+            <input class="form-input form-input-mono" id="dest-cEndPost" type="text" maxlength="11">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cidade Exterior</label>
+            <input class="form-input" id="dest-xCidade" type="text" maxlength="60">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estado/Província</label>
+            <input class="form-input" id="dest-xEstProv" type="text" maxlength="60">
+          </div>
+        </div>
+
+        <!-- Imóvel -->
+        <div class="section-title" style="margin-top: var(--space-6);">
+          <span class="icon">🏠</span>Imóvel (imovel) <span style="font-weight: 400; font-size: var(--text-xs); color: var(--color-neutral-500);">Operações 99.03.x — Exceto obras</span>
+        </div>
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">Inscrição Imobiliária Fiscal</label>
+            <input class="form-input form-input-mono" id="imovel-inscFisc" type="text" maxlength="30">
+          </div>
+          <div class="form-group">
+            <label class="form-label">CIB (Cadastro Imobiliário Brasileiro)</label>
+            <input class="form-input form-input-mono" id="imovel-cCIB" type="text" maxlength="8">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Município (IBGE)</label>
+            <input class="form-input form-input-mono" id="imovel-cMun" type="text" maxlength="7">
+          </div>
+        </div>
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">CEP</label>
+            <input class="form-input form-input-mono" id="imovel-CEP" type="text" maxlength="9">
+          </div>
+          <div class="form-group" style="grid-column: span 2;">
+            <label class="form-label">Logradouro</label>
+            <input class="form-input" id="imovel-xLgr" type="text" maxlength="255">
+          </div>
+        </div>
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">Número</label>
+            <input class="form-input" id="imovel-nro" type="text" maxlength="60">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Complemento</label>
+            <input class="form-input" id="imovel-xCpl" type="text" maxlength="156">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Bairro</label>
+            <input class="form-input" id="imovel-xBairro" type="text" maxlength="60">
+          </div>
+        </div>
+
+        <!-- Locação de Bens Móveis -->
+        <div class="section-title" style="margin-top: var(--space-6);">
+          <span class="icon">📦</span>Locação de Bens Móveis (gLocBensMoveis) <span style="font-weight: 400; font-size: var(--text-xs); color: var(--color-neutral-500);">Apenas cTribNac = 99.04.01 — Até 99 itens</span>
+        </div>
+        <div id="bens-moveis-list" style="margin-bottom: var(--space-3);"></div>
+        <button class="btn btn-ghost btn-sm" id="btn-add-bem-movel">＋ Adicionar Bem Móvel</button>
+
+        <!-- Reembolso/Repasse/Ressarcimento -->
+        <div class="section-title" style="margin-top: var(--space-6);">
+          <span class="icon">💰</span>Reembolso / Repasse / Ressarcimento (gReeRepRes) <span style="font-weight: 400; font-size: var(--text-xs); color: var(--color-neutral-500);">Até 1000 documentos</span>
+        </div>
+        <div id="reerepres-list" style="margin-bottom: var(--space-3);"></div>
+        <button class="btn btn-ghost btn-sm" id="btn-add-reerepres">＋ Adicionar Reembolso/Repasse</button>
+
+        <!-- Deduções/Reduções da BC -->
+        <div class="section-title" style="margin-top: var(--space-6);">
+          <span class="icon">📉</span>Deduções / Reduções da BC (gDedRedIBSCBS) <span style="font-weight: 400; font-size: var(--text-xs); color: var(--color-neutral-500);">Até 1000 itens</span>
+        </div>
+        <div id="dedred-list" style="margin-bottom: var(--space-3);"></div>
+        <button class="btn btn-ghost btn-sm" id="btn-add-dedred">＋ Adicionar Dedução/Redução</button>
+
       </div>
     </div>
 
@@ -634,6 +943,74 @@ function setupConditionalFields() {
   if (cTribNac && panelBM) {
     cTribNac.addEventListener('input', () => {
       panelBM.classList.toggle('hidden', cTribNac.value.trim() !== '99.04.01');
+    });
+  }
+
+  // Dest exterior fields toggle
+  const destCPais = document.getElementById('dest-cPais');
+  const destExtFields = document.getElementById('dest-exterior-fields');
+  if (destCPais && destExtFields) {
+    destCPais.addEventListener('input', () => {
+      const show = destCPais.value.trim() && destCPais.value.trim().toUpperCase() !== 'BR';
+      destExtFields.style.display = show ? '' : 'none';
+    });
+  }
+
+  // ─── Dynamic Lists in Complementos Tab ────────────
+  setupDynamicList('btn-add-ref-nfse', 'ref-nfse-list', () => `
+    <div style="display: flex; gap: var(--space-2); margin-bottom: var(--space-2); align-items: center;">
+      <input class="form-input form-input-mono" data-list-ibs-refNFSe type="text" maxlength="50" placeholder="Chave de acesso NFS-e (50 dígitos)" style="flex: 1;">
+      <button class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">✕</button>
+    </div>
+  `);
+
+  setupDynamicList('btn-add-pag-antecipado', 'pag-antecipado-list', () => `
+    <div style="display: flex; gap: var(--space-2); margin-bottom: var(--space-2); align-items: center;">
+      <input class="form-input form-input-mono" data-list-ibs-pagAntecipado type="text" maxlength="50" placeholder="Chave NFS-e pag. antecipado (50 dígitos)" style="flex: 1;">
+      <button class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">✕</button>
+    </div>
+  `);
+
+  setupDynamicList('btn-add-bem-movel', 'bens-moveis-list', () => `
+    <div data-bm-item style="display: grid; grid-template-columns: 1fr 2fr 80px 40px; gap: var(--space-2); margin-bottom: var(--space-2); align-items: center;">
+      <input class="form-input form-input-mono" data-bm-ncm type="text" maxlength="8" placeholder="NCM (8 díg.)">
+      <input class="form-input" data-bm-desc type="text" maxlength="150" placeholder="Descrição do bem móvel">
+      <input class="form-input form-input-mono" data-bm-qtd type="number" min="1" max="999" value="1" placeholder="Qtd">
+      <button class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">✕</button>
+    </div>
+  `);
+
+  setupDynamicList('btn-add-reerepres', 'reerepres-list', () => `
+    <div data-reerepres-item style="display: grid; grid-template-columns: 1fr 1fr 2fr 40px; gap: var(--space-2); margin-bottom: var(--space-2); align-items: center;">
+      <select class="form-select" data-rrr-tipo style="font-size: var(--text-xs);">
+        ${Object.entries(ENUMS.tpReeRepRes).map(([k, v]) => `<option value="${k}">${k} — ${v}</option>`).join('')}
+      </select>
+      <input class="form-input form-input-mono" data-rrr-valor type="text" placeholder="Valor R$">
+      <input class="form-input form-input-mono" data-rrr-chave type="text" maxlength="50" placeholder="Chave DF-e (opcional)">
+      <button class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">✕</button>
+    </div>
+  `);
+
+  setupDynamicList('btn-add-dedred', 'dedred-list', () => `
+    <div data-dedred-item style="display: grid; grid-template-columns: 1fr 1fr 2fr 40px; gap: var(--space-2); margin-bottom: var(--space-2); align-items: center;">
+      <select class="form-select" data-dr-tipo style="font-size: var(--text-xs);">
+        ${Object.entries(ENUMS.tpDedRedIBSCBS).map(([k, v]) => `<option value="${k}">${k} — ${v}</option>`).join('')}
+      </select>
+      <input class="form-input form-input-mono" data-dr-valor type="text" placeholder="Valor R$">
+      <input class="form-input" data-dr-desc type="text" maxlength="150" placeholder="Descrição (obrig. para tipo 99)">
+      <button class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">✕</button>
+    </div>
+  `);
+}
+
+function setupDynamicList(btnId, listId, templateFn) {
+  const btn = document.getElementById(btnId);
+  const list = document.getElementById(listId);
+  if (btn && list) {
+    btn.addEventListener('click', () => {
+      const div = document.createElement('div');
+      div.innerHTML = templateFn();
+      list.appendChild(div.firstElementChild);
     });
   }
 }

@@ -120,6 +120,21 @@ export async function consultarDPS(idDPS) {
 }
 
 /**
+ * HEAD /dps/{idDPS} — Verifica se NFS-e foi gerada a partir da DPS
+ * @param {string} idDPS - ID da DPS
+ * @returns {Promise<{exists: boolean}>}
+ */
+export async function verificarDPS(idDPS) {
+  const url = `${getBaseUrl('sefin')}/dps/${idDPS}`;
+  try {
+    const response = await fetch(url, { method: 'HEAD' });
+    return { exists: response.ok, status: response.status };
+  } catch (err) {
+    return { exists: false, status: 0, error: err.message };
+  }
+}
+
+/**
  * POST /nfse/{chaveAcesso}/eventos — Registrar evento na NFS-e
  * @param {string} chaveAcesso - Chave da NFS-e
  * @param {Object} evento - Dados do evento
@@ -136,6 +151,41 @@ export async function registrarEvento(chaveAcesso, evento) {
  */
 export async function consultarEventos(chaveAcesso) {
   return apiRequest('sefin', `/nfse/${chaveAcesso}/eventos`);
+}
+
+/**
+ * GET /nfse/{chaveAcesso}/eventos/{tipoEvento} — Filtrar eventos por tipo
+ */
+export async function consultarEventosTipo(chaveAcesso, tipoEvento) {
+  return apiRequest('sefin', `/nfse/${chaveAcesso}/eventos/${tipoEvento}`);
+}
+
+/**
+ * GET /nfse/{chaveAcesso}/eventos/{tipoEvento}/{numSeqEvento} — Evento específico
+ */
+export async function consultarEventoEspecifico(chaveAcesso, tipoEvento, numSeq) {
+  return apiRequest('sefin', `/nfse/${chaveAcesso}/eventos/${tipoEvento}/${numSeq}`);
+}
+
+/**
+ * GET /parametros_municipais/{codMun}/convenio — Convênio municipal
+ */
+export async function consultarConvenio(codMun) {
+  return apiRequest('sefin', `/parametros_municipais/${codMun}/convenio`);
+}
+
+/**
+ * GET /parametros_municipais/{codMun}/{cpfCnpj} retencoes — Retenções do contribuinte
+ */
+export async function consultarRetencoes(codMun, cpfCnpj) {
+  return apiRequest('sefin', `/parametros_municipais/${codMun}/${cpfCnpj}`);
+}
+
+/**
+ * GET /parametros_municipais/{codMun}/beneficiomunicipal/{nBM} — Benefício
+ */
+export async function consultarBeneficio(codMun, nBM) {
+  return apiRequest('sefin', `/parametros_municipais/${codMun}/beneficiomunicipal/${nBM}`);
 }
 
 /**
