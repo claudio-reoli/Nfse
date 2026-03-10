@@ -8,6 +8,7 @@ import { renderEmissaoDPS } from './pages/emissao-dps.js';
 import { renderConsultaNFSe } from './pages/consulta-nfse.js';
 import { renderEventos } from './pages/eventos.js';
 import { renderADN } from './pages/adn.js';
+import { renderConfiguracoes, startCertExpiryWatch } from './pages/configuracoes.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   const contentEl = document.getElementById('main-content');
@@ -98,62 +99,13 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
     })
-    .register('/configuracoes', (c) => {
-      c.innerHTML = `
-        <div class="page-header animate-slide-up">
-          <div>
-            <h1 class="page-title">Configurações</h1>
-            <p class="page-description">Certificado digital, ambiente, e preferências do sistema</p>
-          </div>
-        </div>
-        <div class="grid grid-2 gap-6 stagger">
-          <div class="card animate-slide-up">
-            <div class="card-header"><h3 class="card-title">🔒 Certificado Digital</h3></div>
-            <div class="card-body">
-              <div class="form-group mb-4">
-                <label class="form-label">Tipo</label>
-                <select class="form-select">
-                  <option>A1 — Arquivo (.pfx/.p12)</option>
-                  <option>A3 — Token/Smart Card</option>
-                </select>
-              </div>
-              <div class="form-group mb-4">
-                <label class="form-label">Arquivo do Certificado (.pfx)</label>
-                <input class="form-input" type="file" accept=".pfx,.p12">
-              </div>
-              <div class="form-group mb-4">
-                <label class="form-label">Senha</label>
-                <input class="form-input" type="password" placeholder="••••••••">
-              </div>
-              <button class="btn btn-primary w-full">Carregar Certificado</button>
-            </div>
-          </div>
-          <div class="card animate-slide-up">
-            <div class="card-header"><h3 class="card-title">⚙️ Ambiente</h3></div>
-            <div class="card-body">
-              <div class="form-group mb-4">
-                <label class="form-label">Ambiente de Operação</label>
-                <select class="form-select">
-                  <option>Produção Restrita (Sandbox)</option>
-                  <option>Produção</option>
-                </select>
-              </div>
-              <div class="form-group mb-4">
-                <label class="form-label">URL Sefin Nacional</label>
-                <input class="form-input form-input-mono" type="text" value="sefin.producaorestrita.nfse.gov.br" readonly>
-              </div>
-              <div class="form-group">
-                <label class="form-label">URL ADN</label>
-                <input class="form-input form-input-mono" type="text" value="adn.producaorestrita.nfse.gov.br" readonly>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-    });
+    .register('/configuracoes', renderConfiguracoes);
 
   // Start router
   router.start();
+
+  // Start certificate expiry monitoring
+  startCertExpiryWatch();
 
   // ─── Sidebar Navigation ────────────────────────────
   document.querySelectorAll('.nav-item[data-route]').forEach(item => {
