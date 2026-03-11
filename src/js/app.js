@@ -9,19 +9,50 @@ import { renderConsultaNFSe } from './pages/consulta-nfse.js';
 import { renderEventos } from './pages/eventos.js';
 import { renderADN } from './pages/adn.js';
 import { renderConfiguracoes, startCertExpiryWatch } from './pages/configuracoes.js';
+import { renderLogin } from './pages/login.js';
+import { renderGestaoAcessos } from './pages/gestao-acessos.js';
+import { renderXmlAssinado } from './pages/xml-assinado.js';
+import { renderGuiasContribuinte } from './pages/guias-contribuinte.js';
+import { renderMinhasNotas } from './pages/minhas-notas.js';
+import { getSession, logout, isAuthorized, ROLES, AUTH_LEVELS } from './auth.js';
+import { setEnvironment, setDemoMode } from './api-service.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+  if (!getSession() && window.location.hash !== '#/login') {
+    window.location.hash = '/login';
+  }
+
   const contentEl = document.getElementById('main-content');
   if (!contentEl) return;
+
+  // Load initial API settings
+  try {
+    const settingsStr = localStorage.getItem('nfse_settings');
+    if (settingsStr) {
+      const settings = JSON.parse(settingsStr);
+      setEnvironment(settings.ambiente || 'sandbox');
+      setDemoMode(!!settings.demoMode);
+    } else {
+      setEnvironment('sandbox');
+      setDemoMode(false);
+    }
+  } catch (e) {
+    setEnvironment('sandbox');
+    setDemoMode(false);
+  }
 
   // ─── Router Setup ────────────────────────────
   const router = new Router(contentEl);
   router
+    .register('/login', renderLogin)
     .register('/dashboard', renderDashboard)
+    .register('/gestao-acessos', renderGestaoAcessos)
     .register('/emissao-dps', renderEmissaoDPS)
     .register('/consulta-nfse', renderConsultaNFSe)
     .register('/eventos', renderEventos)
     .register('/adn', renderADN)
+    .register('/guias', renderGuiasContribuinte)
+    .register('/minhas-notas', renderMinhasNotas)
     .register('/decisao-judicial', (c) => {
       c.innerHTML = `
         <div class="page-header animate-slide-up">
@@ -127,5 +158,69 @@ document.addEventListener('DOMContentLoaded', () => {
         appShell.classList.toggle('sidebar-collapsed');
       }
     });
+  }
+
+  // ─── Authentication Flow Control ─────────────────────
+  
+  function updateUIForSession() {
+    const session = getSession();
+    const shell = document.getElementById('app-shell');
+    const sidebar = document.getElementById('sidebar');
+    const header = document.getElementById('header');
+
+    if (session) {
+      if (shell) shell.style.display = '';
+      sidebar?.classList.remove('hidden');
+      header?.classList.remove('hidden');
+
+      const nameEl = document.getElementById('sidebar-user-name');
+      const roleEl = document.getElementById('sidebar-user-role');
+      const avatarEl = document.getElementById('sidebar-user-avatar');
+      
+      if(nameEl) nameEl.textContent = session.name;
+      if(roleEl) roleEl.textContent = session.role;
+      if(avatarEl) avatarEl.textContent = session.name.substring(0, 2).toUpperCase();
+
+      if (session.role === ROLES.FATURISTA) {
+        document.getElementById('nav-configuracoes')?.style.setProperty('display', 'none');
+        document.getElementById('nav-gestao-acessos')?.style.setProperty('display', 'none');
+      } else {
+        document.getElementById('nav-configuracoes')?.style.setProperty('display', 'flex');
+        document.getElementById('nav-gestao-acessos')?.style.setProperty('display', 'flex');
+      }
+    } else {
+      if (shell) shell.style.display = 'block';
+      sidebar?.classList.add('hidden');
+      header?.classList.add('hidden');
+    }
+  }
+
+  // Intercept Hash changes for route guarding
+  window.addEventListener('hashchange', () => {
+    const currentHash = window.location.hash || '#/dashboard';
+    const session = getSession();
+    if (!session && currentHash !== '#/login') {
+      window.location.hash = '/login';
+    } else if (session && currentHash === '#/login') {
+      window.location.hash = '/dashboard';
+    } else {
+      updateUIForSession();
+    }
+  });
+
+  window.addEventListener('session_changed', () => {
+    updateUIForSession();
+  });
+
+  document.getElementById('btn-logout')?.addEventListener('click', () => {
+    logout();
+    window.location.hash = '/login';
+  });
+
+  // Initial Auth Check
+  if (!getSession()) {
+    window.location.hash = '/login';
+  } else {
+    updateUIForSession();
   }
 });

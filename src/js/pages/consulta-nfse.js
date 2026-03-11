@@ -132,14 +132,14 @@ export function renderConsultaNFSe(container) {
               </tr>
             </thead>
             <tbody>
-              <tr><td>Valor do Serviço</td><td style="text-align:right; font-family: var(--font-mono); font-weight: 600;">R$ 15.800,00</td></tr>
-              <tr><td>Base de Cálculo ISSQN</td><td style="text-align:right; font-family: var(--font-mono);">R$ 15.800,00</td></tr>
-              <tr><td>ISSQN (5,00%)</td><td style="text-align:right; font-family: var(--font-mono);">R$ 790,00</td></tr>
-              <tr><td>PIS</td><td style="text-align:right; font-family: var(--font-mono);">R$ 102,70</td></tr>
-              <tr><td>COFINS</td><td style="text-align:right; font-family: var(--font-mono);">R$ 474,00</td></tr>
+              <tr><td>Valor do Serviço</td><td style="text-align:right; font-family: var(--font-mono); font-weight: 600;" id="result-vServ">R$ 15.800,00</td></tr>
+              <tr><td>Base de Cálculo ISSQN</td><td style="text-align:right; font-family: var(--font-mono);" id="result-vBC">R$ 15.800,00</td></tr>
+              <tr><td>ISSQN (5,00%)</td><td style="text-align:right; font-family: var(--font-mono);" id="result-vISSQN">R$ 790,00</td></tr>
+              <tr><td>PIS</td><td style="text-align:right; font-family: var(--font-mono);" id="result-vPIS">R$ 102,70</td></tr>
+              <tr><td>COFINS</td><td style="text-align:right; font-family: var(--font-mono);" id="result-vCOFINS">R$ 474,00</td></tr>
               <tr style="border-top: 2px solid var(--surface-glass-border);">
                 <td style="font-weight: 700; color: var(--color-neutral-100);">Valor Líquido</td>
-                <td style="text-align:right; font-family: var(--font-mono); font-weight: 700; color: var(--color-accent-400); font-size: var(--text-md);">R$ 15.010,00</td>
+                <td style="text-align:right; font-family: var(--font-mono); font-weight: 700; color: var(--color-accent-400); font-size: var(--text-md);" id="result-vLiq">R$ 15.010,00</td>
               </tr>
             </tbody>
           </table>
@@ -151,18 +151,18 @@ export function renderConsultaNFSe(container) {
           <div class="grid grid-3 gap-4">
             <div style="padding: var(--space-3); background: var(--surface-glass); border-radius: var(--radius-md); text-align: center;">
               <div style="font-size: var(--text-xs); color: var(--color-neutral-500); margin-bottom: var(--space-1);">IBS UF</div>
-              <div style="font-size: var(--text-md); font-weight: 700; color: var(--color-primary-400); font-family: var(--font-mono);">R$ 14,43</div>
-              <div style="font-size: 10px; color: var(--color-neutral-600);">Alíq. Efet. 0,10%</div>
+              <div style="font-size: var(--text-md); font-weight: 700; color: var(--color-primary-400); font-family: var(--font-mono);" id="result-ibs-uf-val">R$ 0,00</div>
+              <div style="font-size: 10px; color: var(--color-neutral-600);" id="result-ibs-uf-aliq">Alíq. Efet. 0,00%</div>
             </div>
             <div style="padding: var(--space-3); background: var(--surface-glass); border-radius: var(--radius-md); text-align: center;">
               <div style="font-size: var(--text-xs); color: var(--color-neutral-500); margin-bottom: var(--space-1);">IBS Municipal</div>
-              <div style="font-size: var(--text-md); font-weight: 700; color: var(--color-accent-400); font-family: var(--font-mono);">R$ 7,21</div>
-              <div style="font-size: 10px; color: var(--color-neutral-600);">Alíq. Efet. 0,05%</div>
+              <div style="font-size: var(--text-md); font-weight: 700; color: var(--color-accent-400); font-family: var(--font-mono);" id="result-ibs-mun-val">R$ 0,00</div>
+              <div style="font-size: 10px; color: var(--color-neutral-600);" id="result-ibs-mun-aliq">Alíq. Efet. 0,00%</div>
             </div>
             <div style="padding: var(--space-3); background: var(--surface-glass); border-radius: var(--radius-md); text-align: center;">
               <div style="font-size: var(--text-xs); color: var(--color-neutral-500); margin-bottom: var(--space-1);">CBS Federal</div>
-              <div style="font-size: var(--text-md); font-weight: 700; color: var(--color-warning-400); font-family: var(--font-mono);">R$ 129,90</div>
-              <div style="font-size: 10px; color: var(--color-neutral-600);">Alíq. Efet. 0,90%</div>
+              <div style="font-size: var(--text-md); font-weight: 700; color: var(--color-warning-400); font-family: var(--font-mono);" id="result-cbs-val">R$ 0,00</div>
+              <div style="font-size: 10px; color: var(--color-neutral-600);" id="result-cbs-aliq">Alíq. Efet. 0,00%</div>
             </div>
           </div>
         </div>
@@ -210,8 +210,77 @@ export function renderConsultaNFSe(container) {
         const nfse = response.data.infNFSe || response.data;
         document.getElementById('result-chave').textContent = chave;
         document.getElementById('result-nNFSe').textContent = nfse.nNFSe || 'N/A';
-        document.getElementById('result-dhProc').textContent = nfse.dhProc || '-';
-        document.getElementById('result-status').textContent = `cStat: ${response.data.cStat} — Autorizada`;
+        
+        let dEmi = nfse.dhEmi || nfse.dhProc || '-';
+        if (dEmi !== '-') {
+          const dt = new Date(dEmi);
+          dEmi = dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR');
+        }
+        document.getElementById('result-dhProc').textContent = dEmi;
+        
+        document.getElementById('result-status').textContent = `cStat: ${response.data.cStat} — ${response.data.cStat === '100' ? 'Autorizada' : 'Processada'}`;
+        
+        const locEmi = nfse.locEmi || (nfse.emit && nfse.emit.xMun ? nfse.emit.xMun : 'São Paulo - SP');
+        document.getElementById('result-locEmi').textContent = locEmi;
+
+        document.getElementById('result-amb').textContent = nfse.ambGer === '1' ? 'Produção' : 'Homologação';
+
+        // Prestador
+        if (nfse.emit) {
+           document.getElementById('result-prest-doc').textContent = maskCNPJ(nfse.emit.CNPJ || '');
+           document.getElementById('result-prest-nome').textContent = nfse.emit.xNome || 'N/A';
+           document.getElementById('result-prest-mun').textContent = nfse.emit.xMun || 'N/A';
+        }
+
+        // Tomador
+        if (nfse.toma) {
+           document.getElementById('result-toma-doc').textContent = maskCNPJ(nfse.toma.CNPJ || nfse.toma.CPF || '');
+           document.getElementById('result-toma-nome').textContent = nfse.toma.xNome || 'N/A';
+           document.getElementById('result-toma-mun').textContent = nfse.toma.xMun || 'N/A';
+        } else {
+           document.getElementById('result-toma-doc').textContent = '—';
+           document.getElementById('result-toma-nome').textContent = 'Consumidor Final / Não Informado';
+           document.getElementById('result-toma-mun').textContent = '—';
+        }
+
+        // Valores update (if we have values container)
+        const vS = document.getElementById('result-vServ');
+        if (vS && nfse.valores) vS.textContent = maskCurrency(nfse.valores.vServ);
+
+        const vBC = document.getElementById('result-vBC');
+        if (vBC && nfse.valores) vBC.textContent = maskCurrency(nfse.valores.vBC || nfse.valores.vServ || 0);
+
+        const vISSQN = document.getElementById('result-vISSQN');
+        if (vISSQN && nfse.valores) vISSQN.textContent = maskCurrency(nfse.valores.vISSQN || 0);
+
+        const vPIS = document.getElementById('result-vPIS');
+        if (vPIS && nfse.valores) vPIS.textContent = maskCurrency(nfse.valores.vPIS || 0);
+
+        const vCOFINS = document.getElementById('result-vCOFINS');
+        if (vCOFINS && nfse.valores) vCOFINS.textContent = maskCurrency(nfse.valores.vCofins || 0);
+
+        const vL = document.getElementById('result-vLiq');
+        if (vL && nfse.valores) vL.textContent = maskCurrency(nfse.valores.vLiq || nfse.valores.vServ || 0);
+
+        // IBS/CBS update
+        if (nfse.IBSCBS) {
+           const ufs = nfse.IBSCBS.uf;
+           if (ufs) {
+              document.getElementById('result-ibs-uf-val').textContent = maskCurrency(ufs.vIBSUF);
+              document.getElementById('result-ibs-uf-aliq').textContent = `Alíq. Efet. ${ufs.pAliqEfetUF || ufs.pIBSUF || '0.00'}%`;
+           }
+           const muns = nfse.IBSCBS.mun;
+           if (muns) {
+              document.getElementById('result-ibs-mun-val').textContent = maskCurrency(muns.vIBSMun);
+              document.getElementById('result-ibs-mun-aliq').textContent = `Alíq. Efet. ${muns.pAliqEfetMun || muns.pIBSMun || '0.00'}%`;
+           }
+           const feds = nfse.IBSCBS.fed;
+           if (feds) {
+              document.getElementById('result-cbs-val').textContent = maskCurrency(feds.vCBS);
+              document.getElementById('result-cbs-aliq').textContent = `Alíq. Efet. ${feds.pAliqEfetCBS || feds.pCBS || '0.00'}%`;
+           }
+        }
+
         document.getElementById('consulta-result').classList.remove('hidden');
         document.getElementById('consulta-empty').classList.add('hidden');
         toast.success('✅ NFS-e localizada com sucesso!');

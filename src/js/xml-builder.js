@@ -409,6 +409,7 @@ export function buildDPSXml(formData) {
  */
 export function collectDPSFormData() {
   const val = (id) => document.getElementById(id)?.value?.trim() || '';
+  const valDoc = (id) => val(id).replace(/\D/g, '');
   return {
     // Identificação
     tpAmb: val('dps-tpAmb'),
@@ -422,7 +423,7 @@ export function collectDPSFormData() {
     procEmi: val('dps-procEmi'),
     // Prestador
     prestTipoInscr: val('prest-tipoInscr'),
-    prestDoc: val('prest-doc'),
+    prestDoc: valDoc('prest-doc'),
     prestIM: val('prest-IM'),
     prestXNome: val('prest-xNome'),
     prestCEP: val('prest-CEP'),
@@ -437,7 +438,7 @@ export function collectDPSFormData() {
     regEspTrib: '0',
     // Tomador
     tomaTipoDoc: val('toma-tipoDoc'),
-    tomaDoc: val('toma-doc'),
+    tomaDoc: valDoc('toma-doc'),
     tomaIM: val('toma-IM'),
     tomaXNome: val('toma-xNome'),
     tomaCEP: val('toma-CEP'),
@@ -492,13 +493,13 @@ export function collectDPSFormData() {
     ibsPRedutor: val('ibs-pRedutor'),
     // Intermediário
     interTipoDoc: val('inter-tipoDoc'),
-    interDoc: val('inter-doc'),
+    interDoc: valDoc('inter-doc'),
     interIM: val('inter-IM'),
     interXNome: val('inter-xNome'),
     interEmail: val('inter-email'),
     // Destinatário
     destTipoDoc: val('dest-tipoDoc'),
-    destDoc: val('dest-doc'),
+    destDoc: valDoc('dest-doc'),
     destCNaoNIF: val('dest-cNaoNIF'),
     destXNome: val('dest-xNome'),
     destCMun: val('dest-cMun'),
@@ -586,18 +587,40 @@ function collectDedRed() {
  */
 export function validateDPSForm(data) {
   const errors = [];
+  const reIBGE = /^\d{7}$/;
+  const reNCM = /^\d{8}$/;
+
   if (!data.tpAmb) errors.push('Ambiente (tpAmb) é obrigatório');
   if (!data.serie) errors.push('Série da DPS é obrigatória');
   if (!data.nDPS) errors.push('Número da DPS é obrigatório');
   if (!data.dCompet) errors.push('Data de Competência é obrigatória');
   if (!data.dhEmi) errors.push('Data/Hora de Emissão é obrigatória');
   if (!data.tpEmit) errors.push('Tipo do Emitente é obrigatório');
-  if (!data.cLocEmi) errors.push('Município Emissor (IBGE) é obrigatório');
-  if (!data.prestDoc) errors.push('CNPJ/CPF do Prestador é obrigatório');
+  
+  if (!data.cLocEmi || !reIBGE.test(data.cLocEmi)) {
+    errors.push('Município Emissor deve ter 7 dígitos (IBGE).');
+  }
+
+  if (!data.prestDoc) {
+    errors.push('Documento do Prestador é obrigatório');
+  } else if (data.prestTipoInscr === '1' && data.prestDoc.length !== 14) {
+    errors.push('CNPJ do Prestador deve ter 14 dígitos.');
+  }
+
   if (!data.cTribNac) errors.push('Código de Tributação Nacional é obrigatório');
   if (!data.xDescServ) errors.push('Descrição do Serviço é obrigatória');
-  if (!data.cLocPrest) errors.push('Local da Prestação é obrigatório');
-  if (!data.vServ) errors.push('Valor do Serviço é obrigatório');
+  
+  if (!data.cLocPrest || !reIBGE.test(data.cLocPrest)) {
+    errors.push('Local da Prestação deve ter 7 dígitos (IBGE).');
+  }
+
+  if (data.cTribNac === '99.04.01') {
+    if (!data.bmNCM || !reNCM.test(data.bmNCM)) errors.push('NCM do Bem Móvel deve ter 8 dígitos.');
+  }
+
+  if (!data.vServ || parseFloat(data.vServ.replace(/\./g, '').replace(',', '.')) <= 0) {
+    errors.push('Valor do Serviço deve ser maior que zero.');
+  }
 
   return { valid: errors.length === 0, errors };
 }

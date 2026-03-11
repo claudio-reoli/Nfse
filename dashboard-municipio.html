@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Sistema Web NFS-e Padrão Nacional — Administração Municipal">
+  <title>NFS-e Sefin Utinga — Município</title>
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="src/css/design-system.css">
+  <link rel="stylesheet" href="src/css/layout.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
+</head>
+<body class="dark-theme">
+  <div class="app-shell" id="app-shell" style="display: block;">
+
+    <!-- ─── Sidebar ──────────────────────────────────── -->
+    <aside class="sidebar hidden" id="sidebar">
+      <div class="sidebar-brand" style="border-bottom: 1px solid var(--surface-glass-border); padding-bottom: 20px;">
+        <div class="sidebar-brand-logo" style="background: var(--color-primary-600); border-radius: 8px;">M</div>
+        <div class="sidebar-brand-text">
+          <div class="sidebar-brand-name">SEFIN Ouro</div>
+          <div class="sidebar-brand-sub">Adm Municipal</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="sidebar-section-label">Fiscalização Institucional</div>
+
+        <button class="nav-item active" data-route="/dashboard" id="nav-dashboard">
+          <span class="nav-item-icon">📊</span>
+          <span class="nav-item-text">Painel de Arrecadação</span>
+        </button>
+
+        <button class="nav-item" data-route="/consulta-notas" id="nav-consulta-notas">
+          <span class="nav-item-icon">📑</span>
+          <span class="nav-item-text">Notas Importadas (ADN)</span>
+        </button>
+
+        <div class="sidebar-section-label">Sistema Administrativo</div>
+
+        <button class="nav-item" data-route="/gestao-acessos" id="nav-gestao-acessos">
+          <span class="nav-item-icon">👥</span>
+          <span class="nav-item-text">Acessos Internos</span>
+        </button>
+
+        <button class="nav-item" data-route="/configuracoes" id="nav-configuracoes">
+          <span class="nav-item-icon">⚙️</span>
+          <span class="nav-item-text">Configurações</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user" id="sidebar-user-block">
+          <div class="sidebar-user-avatar" id="sidebar-user-avatar">AS</div>
+          <div class="sidebar-user-info">
+            <div class="sidebar-user-name" id="sidebar-user-name">Carregando...</div>
+            <div class="sidebar-user-role" id="sidebar-user-role">Conectando</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ─── Header ──────────────────────────────────── -->
+    <header class="header hidden" id="header">
+      <div class="header-left">
+        <button class="header-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
+          ☰
+        </button>
+        <div class="header-breadcrumb">
+          Sefin Utinga / <span>Portal Tributário Central</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <span class="header-env-badge" style="background: linear-gradient(135deg, #0056b4, #004494);">🏛️ Malha Nacional</span>
+        <button class="btn btn-ghost" style="color: var(--color-danger-400); margin-left: 8px;" id="btn-logout">
+          <i class="fas fa-sign-out-alt"></i> Sair do Painel
+        </button>
+      </div>
+    </header>
+
+    <!-- ─── Main Content ────────────────────────────── -->
+    <main class="main-content" id="main-content">
+      <!-- Pages rendered here by router -->
+    </main>
+  </div>
+
+  <script type="module" src="src/js/app-municipio.js"></script>
+</body>
+</html>

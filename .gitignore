@@ -1,37 +1,7 @@
-# Node modules
 node_modules/
-
-# OS files
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# IDE
-.vscode/
-.idea/
-*.code-workspace
-
-# Logs
-*.log
-
-# Temp files
-*.tmp
-*.bak
-*.swp
-~$*
-
-# Certificates (NEVER commit private keys)
+node/
+.env
+data/
 *.pfx
 *.p12
-*.key
-*.pem
-
-# Build output
-dist/
-build/
-
-# Claude/Agent configs (personal)
-.claude/
-
-# Compressed archives
-*.zip
+node.zip

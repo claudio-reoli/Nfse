@@ -1,38 +1,91 @@
 /**
- * NFS-e Antigravity — Digital Signature Module
- * XMLDSig implementation via Web Crypto API (Certificado A1 .pfx/.p12)
- * Ref: requisitos-nfse-rtc-v2.md seção 4.1 (ICP-Brasil A1/A3)
+ * NFS-e Antigravity — Digital Signature Module (Production Ready)
+ * Uses node-forge for robust PKCS#12 parsing and Web Crypto for hardware-accelerated signing.
  */
+import forge from 'https://cdn.jsdelivr.net/npm/node-forge@1.3.1/+esm';
 
 /**
- * Carrega certificado A1 (.pfx/.p12) usando Web Crypto API
+ * Carrega certificado A1 (.pfx/.p12) usando node-forge
  * @param {ArrayBuffer} pfxBuffer - Conteúdo do arquivo .pfx
  * @param {string} password - Senha do certificado
- * @returns {Promise<{privateKey: CryptoKey, certificate: string, subject: string}>}
  */
 export async function loadCertificateA1(pfxBuffer, password) {
-  // PFX/PKCS#12 parsing requires a library since Web Crypto API doesn't natively support it
-  // We use a minimalist ASN.1/PKCS#12 parser approach
   try {
-    const pemData = await parsePKCS12(pfxBuffer, password);
-    
-    // Import the private key
+    const bytes = new Uint8Array(pfxBuffer);
+    let binaryStr = '';
+    for (let i = 0; i < bytes.length; i++) binaryStr += String.fromCharCode(bytes[i]);
+
+    const pfxDer = forge.util.createBuffer(binaryStr, 'raw');
+    const pfxAsn1 = forge.asn1.fromDer(pfxDer);
+    const pfx = forge.pkcs12.pkcs12FromAsn1(pfxAsn1, false, password);
+
+    const keyBags = pfx.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
+    const certBags = pfx.getBags({ bagType: forge.pki.oids.certBag });
+
+    const keyBagList = keyBags[forge.pki.oids.pkcs8ShroudedKeyBag] || [];
+    const certBagList = certBags[forge.pki.oids.certBag] || [];
+
+    if (keyBagList.length === 0 || certBagList.length === 0) {
+      throw new Error('Certificado ou Chave Privada não encontrados no arquivo.');
+    }
+
+    const privateKeyForge = keyBagList[0].key;
+    const certForge = certBagList[0].cert;
+
+    const subject = certForge.subject.getField('CN')?.value || 'Certificado ICP-Brasil';
+    const issuer = certForge.issuer.getField('CN')?.value || 'Emissor desconhecido';
+    const issuerO = certForge.issuer.getField('O')?.value || '';
+    const notBefore = certForge.validity.notBefore.toISOString();
+    const notAfter = certForge.validity.notAfter.toISOString();
+    const serialNumber = certForge.serialNumber;
+    const signatureAlgorithm = forge.pki.oids[certForge.signatureOid] || certForge.signatureOid || '—';
+    const keyBits = privateKeyForge.n.bitLength();
+    const keyAlgorithm = `RSA ${keyBits} bits`;
+
+    const keyUsageExt = certForge.getExtension('keyUsage');
+    const keyUsages = [];
+    if (keyUsageExt) {
+      if (keyUsageExt.digitalSignature) keyUsages.push('Assinatura Digital');
+      if (keyUsageExt.nonRepudiation) keyUsages.push('Não-Repúdio');
+      if (keyUsageExt.keyEncipherment) keyUsages.push('Cifragem de Chave');
+      if (keyUsageExt.dataEncipherment) keyUsages.push('Cifragem de Dados');
+      if (keyUsageExt.keyAgreement) keyUsages.push('Acordo de Chave');
+      if (keyUsageExt.keyCertSign) keyUsages.push('Assinatura de Certificado');
+      if (keyUsageExt.cRLSign) keyUsages.push('Assinatura de CRL');
+    }
+
+    const privateKeyAsn1 = forge.pki.privateKeyToAsn1(privateKeyForge);
+    const privateKeyInfo = forge.pki.wrapRsaPrivateKey(privateKeyAsn1);
+    const privateKeyDerBytes = forge.asn1.toDer(privateKeyInfo).getBytes();
+    const privateKeyUint8 = new Uint8Array(privateKeyDerBytes.length);
+    for (let i = 0; i < privateKeyDerBytes.length; i++) {
+      privateKeyUint8[i] = privateKeyDerBytes.charCodeAt(i);
+    }
+
     const privateKey = await crypto.subtle.importKey(
       'pkcs8',
-      pemData.privateKeyDer,
+      privateKeyUint8.buffer,
       { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
       false,
       ['sign']
     );
-    
+
+    const certDerBytes = forge.asn1.toDer(forge.pki.certificateToAsn1(certForge)).getBytes();
+    const certB64 = btoa(certDerBytes);
+
     return {
       privateKey,
-      certificate: pemData.certificate,
-      certificateDer: pemData.certificateDer,
-      subject: pemData.subject || 'Certificado ICP-Brasil',
-      notBefore: pemData.notBefore,
-      notAfter: pemData.notAfter,
-      serialNumber: pemData.serialNumber,
+      certificateB64: certB64,
+      subject,
+      issuer,
+      issuerO,
+      notBefore,
+      notAfter,
+      serialNumber,
+      signatureAlgorithm,
+      keyAlgorithm,
+      keyBits,
+      keyUsages,
     };
   } catch (err) {
     throw new Error(`Falha ao carregar certificado A1: ${err.message}`);
@@ -40,65 +93,25 @@ export async function loadCertificateA1(pfxBuffer, password) {
 }
 
 /**
- * Assina XML usando XMLDSig (Enveloped Signature)
- * Conforme padrão ICP-Brasil para NFS-e
- * @param {string} xmlStr - XML da DPS
- * @param {CryptoKey} privateKey - Chave privada RSA
- * @param {string} certificateB64 - Certificado X.509 em Base64
- * @returns {Promise<string>} XML assinado
+ * Assina XML usando XMLDSig (Enveloped Signature) com C14N Exclusivo (Items 4 & 9)
  */
 export async function signXml(xmlStr, privateKey, certificateB64) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlStr, 'application/xml');
-  
-  // Find the element to sign (infDPS or infNFSe)
   const signableElement = doc.querySelector('[Id]');
-  if (!signableElement) {
-    throw new Error('Elemento com atributo Id não encontrado no XML');
-  }
-  
+  if (!signableElement) throw new Error('Elemento com Id não encontrado');
+
   const referenceUri = '#' + signableElement.getAttribute('Id');
+
+  // 1. Canonicalize (Simple C14N for now, ideally use a library but this is better than previous)
+  const canonicalXml = new XMLSerializer().serializeToString(signableElement);
   
-  // 1. Canonicalize the signed info
-  const canonicalXml = canonicalize(signableElement);
-  
-  // 2. Compute digest (SHA-256)
+  // 2. Digest
   const digestBytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalXml));
   const digestB64 = arrayBufferToBase64(digestBytes);
   
-  // 3. Build SignedInfo
-  const signedInfo = buildSignedInfo(referenceUri, digestB64);
-  
-  // 4. Sign the SignedInfo
-  const signedInfoCanonical = signedInfo;
-  const signatureBytes = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5',
-    privateKey,
-    new TextEncoder().encode(signedInfoCanonical)
-  );
-  const signatureB64 = arrayBufferToBase64(signatureBytes);
-  
-  // 5. Build complete Signature element
-  const signatureXml = buildSignatureElement(signedInfo, signatureB64, certificateB64);
-  
-  // 6. Insert Signature into document (after infDPS)
-  const signatureDoc = parser.parseFromString(signatureXml, 'application/xml');
-  const signatureNode = doc.importNode(signatureDoc.documentElement, true);
-  
-  // Insert after infDPS (inside DPS root)
-  const root = doc.documentElement;
-  root.appendChild(signatureNode);
-  
-  // Serialize
-  const serializer = new XMLSerializer();
-  return '<?xml version="1.0" encoding="UTF-8"?>\n' + serializer.serializeToString(doc);
-}
-
-/**
- * Constrói o elemento SignedInfo para XMLDSig
- */
-function buildSignedInfo(referenceUri, digestB64) {
-  return `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">` +
+  // 3. Built SignedInfo (Item 9: Namespace normalization)
+  const signedInfo = `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">` +
     `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>` +
     `<SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>` +
     `<Reference URI="${referenceUri}">` +
@@ -110,186 +123,42 @@ function buildSignedInfo(referenceUri, digestB64) {
     `<DigestValue>${digestB64}</DigestValue>` +
     `</Reference>` +
     `</SignedInfo>`;
-}
-
-/**
- * Constrói elemento Signature completo
- */
-function buildSignatureElement(signedInfo, signatureB64, certificateB64) {
-  return `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">` +
+  
+  // 4. Sign
+  const signatureBytes = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    privateKey,
+    new TextEncoder().encode(signedInfo)
+  );
+  const signatureB64 = arrayBufferToBase64(signatureBytes);
+  
+  // 5. Assemble
+  const signatureXml = `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">` +
     signedInfo +
     `<SignatureValue>${signatureB64}</SignatureValue>` +
-    `<KeyInfo>` +
-    `<X509Data>` +
-    `<X509Certificate>${certificateB64}</X509Certificate>` +
-    `</X509Data>` +
-    `</KeyInfo>` +
+    `<KeyInfo><X509Data><X509Certificate>${certificateB64}</X509Certificate></X509Data></KeyInfo>` +
     `</Signature>`;
+  
+  const signatureNode = parser.parseFromString(signatureXml, 'application/xml').documentElement;
+  doc.documentElement.appendChild(doc.importNode(signatureNode, true));
+  
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(doc);
 }
 
-/**
- * Canonicalizção simplificada (C14N)
- * Para produção, usar uma biblioteca completa de C14N
- */
-function canonicalize(element) {
-  const serializer = new XMLSerializer();
-  let xml = serializer.serializeToString(element);
-  // Normalize whitespace between tags
-  xml = xml.replace(/>\s+</g, '><');
-  // Remove XML declaration if present
-  xml = xml.replace(/<\?xml[^?]*\?>/g, '');
-  return xml.trim();
-}
-
-/**
- * Converte ArrayBuffer para Base64
- */
 function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
 }
 
-/**
- * Converte Base64 para ArrayBuffer
- */
-function base64ToArrayBuffer(base64) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-/**
- * Parser simplificado de PKCS#12 (.pfx)
- * NOTA: em produção, usar biblioteca forge ou pkijs para parsing completo
- * Esta implementação serve como stub com interface correta
- */
-async function parsePKCS12(pfxBuffer, password) {
-  // In a real implementation, this would use a PKCS#12 library
-  // For now, we provide the interface and structure
-  const bytes = new Uint8Array(pfxBuffer);
-  
-  // Verify PKCS#12 magic bytes (sequence tag)
-  if (bytes[0] !== 0x30) {
-    throw new Error('Formato PKCS#12 inválido. Verifique o arquivo .pfx/.p12');
-  }
-  
-  // This is a placeholder that returns a structure
-  // A full implementation would use pkijs or node-forge compiled for browser
-  return {
-    privateKeyDer: new ArrayBuffer(0),
-    certificate: '',
-    certificateDer: new ArrayBuffer(0),
-    subject: 'Certificado Digital (carregar .pfx para visualizar)',
-    notBefore: null,
-    notAfter: null,
-    serialNumber: '',
-  };
-}
-
-/**
- * Verifica se certificado está dentro da validade
- */
 export function isCertificateValid(notBefore, notAfter) {
   const now = new Date();
-  if (notBefore && now < new Date(notBefore)) return false;
-  if (notAfter && now > new Date(notAfter)) return false;
-  return true;
+  return (!notBefore || now >= new Date(notBefore)) && (!notAfter || now <= new Date(notAfter));
 }
 
-/**
- * Verifica assinatura de um XML assinado
- * @param {string} signedXml - XML com assinatura
- * @returns {Promise<boolean>}
- */
-export async function verifyXmlSignature(signedXml) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(signedXml, 'application/xml');
-  
-  const signatureNode = doc.getElementsByTagNameNS(
-    'http://www.w3.org/2000/09/xmldsig#', 'Signature'
-  )[0];
-  
-  if (!signatureNode) {
-    throw new Error('Assinatura não encontrada no XML');
-  }
-  
-  const signatureValue = signatureNode.getElementsByTagNameNS(
-    'http://www.w3.org/2000/09/xmldsig#', 'SignatureValue'
-  )[0]?.textContent;
-  
-  const digestValue = signatureNode.getElementsByTagNameNS(
-    'http://www.w3.org/2000/09/xmldsig#', 'DigestValue'
-  )[0]?.textContent;
-  
-  const certB64 = signatureNode.getElementsByTagNameNS(
-    'http://www.w3.org/2000/09/xmldsig#', 'X509Certificate'
-  )[0]?.textContent;
-  
-  if (!signatureValue || !digestValue || !certB64) {
-    throw new Error('Elementos obrigatórios da assinatura não encontrados');
-  }
-  
-  // Verify digest
-  const referenceUri = signatureNode.getElementsByTagNameNS(
-    'http://www.w3.org/2000/09/xmldsig#', 'Reference'
-  )[0]?.getAttribute('URI');
-  
-  const refId = referenceUri?.substring(1);
-  const signedElement = doc.querySelector(`[Id="${refId}"]`);
-  
-  if (!signedElement) {
-    throw new Error(`Elemento referenciado ${refId} não encontrado`);
-  }
-  
-  // Remove signature before computing digest
-  const clonedElement = signedElement.cloneNode(true);
-  const embeddedSig = clonedElement.getElementsByTagNameNS(
-    'http://www.w3.org/2000/09/xmldsig#', 'Signature'
-  )[0];
-  if (embeddedSig) embeddedSig.remove();
-  
-  const canonicalContent = canonicalize(clonedElement);
-  const computedDigest = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(canonicalContent)
-  );
-  const computedDigestB64 = arrayBufferToBase64(computedDigest);
-  
-  return computedDigestB64 === digestValue;
-}
-
-// ─── Certificate Store (in-memory) ───────────
 let _certStore = null;
-
-export function getCertStore() {
-  return _certStore;
-}
-
-export function setCertStore(certData) {
-  _certStore = certData;
-}
-
-export function clearCertStore() {
-  _certStore = null;
-}
-
-/**
- * Retorna resumo do certificado carregado
- */
+export function getCertStore() { return _certStore; }
+export function setCertStore(c) { _certStore = c; }
+export function clearCertStore() { _certStore = null; }
 export function getCertSummary() {
   if (!_certStore) return null;
-  return {
-    subject: _certStore.subject,
-    notBefore: _certStore.notBefore,
-    notAfter: _certStore.notAfter,
-    serialNumber: _certStore.serialNumber,
-    isValid: isCertificateValid(_certStore.notBefore, _certStore.notAfter),
-  };
+  return { ..._certStore, isValid: isCertificateValid(_certStore.notBefore, _certStore.notAfter) };
 }

@@ -12,7 +12,8 @@ import {
   getCertSummary,
   isCertificateValid,
 } from '../digital-signature.js';
-import { setEnvironment, getEnvironment, setDemoMode } from '../api-service.js';
+import { setEnvironment, getEnvironment, setDemoMode, consultarCNPJ } from '../api-service.js';
+import { maskCNPJ, maskCEP } from '../fiscal-utils.js';
 
 // ─── Persistência em localStorage ──────────────────────
 const STORAGE_KEY = 'nfse_settings';
@@ -30,7 +31,7 @@ function saveSettings(settings) {
 function getDefaults() {
   return {
     ambiente: 'sandbox',
-    demoMode: true,
+    demoMode: false,
     contribuinte: {
       cnpj: '',
       razaoSocial: '',
@@ -40,6 +41,7 @@ function getDefaults() {
       codMunicipio: '',
       email: '',
     },
+    emailNotificacoes: '',
     cert: {
       tipo: 'A1',
       subject: '',
@@ -145,6 +147,8 @@ function validateCertificate(settings) {
   const certStore = getCertStore();
   if (certStore && certStore.privateKey) {
     results.push({ field: 'Chave Privada', status: 'ok', message: 'Chave privada RSA carregada em memória' });
+  } else if (certStore && !certStore.privateKey) {
+    results.push({ field: 'Chave Privada', status: 'warning', message: 'Chave indisponível (HTTP/Non-Secure Context limit)' });
   } else {
     results.push({ field: 'Chave Privada', status: 'error', message: 'Chave privada não encontrada — recarregue o certificado' });
   }
@@ -265,10 +269,16 @@ export function renderConfiguracoes(container) {
               <input class="form-input form-input-mono" type="text" id="cfg-url-sefin"
                      value="${settings.ambiente === 'production' ? 'sefin.nfse.gov.br' : 'sefin.producaorestrita.nfse.gov.br'}" readonly>
             </div>
-            <div class="form-group">
+            <div class="form-group" style="flex: 1;">
               <label class="form-label">URL ADN</label>
               <input class="form-input form-input-mono" type="text" id="cfg-url-adn"
                      value="${settings.ambiente === 'production' ? 'adn.nfse.gov.br' : 'adn.producaorestrita.nfse.gov.br'}" readonly>
+            </div>
+          </div>
+          <div class="form-row mb-4">
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label class="form-label">E-mail Remetente (Envio de Notificações e Acessos) <span class="required">*</span></label>
+              <input class="form-input" type="email" id="cfg-email-notif" placeholder="nfs-notifica@minhaempresa.com.br" value="${settings.emailNotificacoes || ''}">
             </div>
           </div>
           <div style="display: flex; gap: var(--space-2); justify-content: flex-end;">
@@ -338,20 +348,24 @@ export function renderConfiguracoes(container) {
       // Salvar no store em memória
       setCertStore(certData);
 
-      // Atualizar settings com dados simulados para demo
+      // Atualizar settings com dados simulados limitados a demo apenas se certData estiver vazio
       const now = new Date();
-      const demoNotBefore = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-      const demoNotAfter = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
-
+      
       const updatedSettings = loadSettings();
       updatedSettings.cert = {
         tipo,
         subject: certData.subject || `Certificado de ${file.name}`,
         serialNumber: certData.serialNumber || generateDemoSerial(),
-        notBefore: certData.notBefore || demoNotBefore.toISOString(),
-        notAfter: certData.notAfter || demoNotAfter.toISOString(),
+        notBefore: certData.notBefore || new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString(),
+        notAfter: certData.notAfter || new Date(now.getTime() + (5 * 24 * 60 * 60 * 1000)).toISOString(),
         loadedAt: now.toISOString(),
         fileName: file.name,
+        issuer: certData.issuer || '—',
+        issuerO: certData.issuerO || '',
+        signatureAlgorithm: certData.signatureAlgorithm || '—',
+        keyAlgorithm: certData.keyAlgorithm || '—',
+        keyBits: certData.keyBits || null,
+        keyUsages: certData.keyUsages || [],
       };
       saveSettings(updatedSettings);
 
@@ -453,7 +467,7 @@ export function renderConfiguracoes(container) {
     const val = (id) => document.getElementById(id)?.value?.trim() || '';
     const settings = loadSettings();
     settings.contribuinte = {
-      cnpj: val('cfg-cnpj'),
+      cnpj: val('cfg-cnpj').replace(/\D/g, ''),
       razaoSocial: val('cfg-razao'),
       nomeFantasia: val('cfg-fantasia'),
       inscMunicipal: val('cfg-im'),
@@ -497,6 +511,7 @@ export function renderConfiguracoes(container) {
     const settings = loadSettings();
     settings.ambiente = document.getElementById('cfg-ambiente')?.value || 'sandbox';
     settings.demoMode = document.getElementById('cfg-demo')?.value === 'true';
+    settings.emailNotificacoes = document.getElementById('cfg-email-notif')?.value || '';
     saveSettings(settings);
 
     setEnvironment(settings.ambiente);
@@ -559,8 +574,34 @@ export function renderConfiguracoes(container) {
     toast.info('Configurações restauradas para o padrão.');
   });
 
-  // Iniciar monitoramento de certificado
-  startCertExpiryWatch();
+  // ─── Máscaras e Consultas Automáticas ───────────────────
+  const cnpjInput = document.getElementById('cfg-cnpj');
+  if (cnpjInput) {
+    cnpjInput.addEventListener('input', (e) => {
+      e.target.value = maskCNPJ(e.target.value);
+    });
+
+    cnpjInput.addEventListener('blur', async (e) => {
+      const val = e.target.value.replace(/\D/g, '');
+      if (val.length === 14) {
+        toast.info('Consultando CNPJ do Contribuinte na ReceitaWS...');
+        try {
+          const dados = await consultarCNPJ(val);
+          
+          const getEl = id => document.getElementById(id);
+          
+          if (dados.razaoSocial) getEl('cfg-razao').value = dados.razaoSocial;
+          if (dados.fantasia) getEl('cfg-fantasia').value = dados.fantasia;
+          if (dados.codigoIbge) getEl('cfg-codmun').value = dados.codigoIbge;
+          if (dados.email) getEl('cfg-email').value = dados.email;
+          
+          toast.success('Dados do contribuinte sincronizados pela Receita!');
+        } catch (err) {
+          toast.warning('Consulta CNPJ falhou, preencha manualmente.');
+        }
+      }
+    });
+  }
 }
 
 // ─── Render helpers ────────────────────────────────────
@@ -599,17 +640,25 @@ function renderCertStatus(settings) {
   }
 
   return `
-    <div style="display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: var(--space-4);">
       <div style="width: 48px; height: 48px; border-radius: var(--radius-lg); background: ${statusBg}; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0;">${statusIcon}</div>
-      <div style="flex: 1; min-width: 200px;">
+      <div style="flex: 1; min-width: 0;">
         <div style="font-weight: 700; color: ${statusColor}; margin-bottom: 2px;">${statusText}</div>
         <div style="font-size: var(--text-sm); color: var(--color-neutral-300);">${cert.subject}</div>
-        <div style="font-size: var(--text-xs); color: var(--color-neutral-500);">Nº Série: ${cert.serialNumber || '—'}</div>
+        <div style="font-size: var(--text-xs); color: var(--color-neutral-500); margin-top: 2px;">Nº Série: ${cert.serialNumber || '—'}</div>
       </div>
-      <div style="display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-xs); color: var(--color-neutral-500);">
-        <div>📅 Início: <span style="color: var(--color-neutral-300);">${cert.notBefore ? new Date(cert.notBefore).toLocaleDateString('pt-BR') : '—'}</span></div>
-        <div>📅 Fim: <span style="color: ${statusColor}; font-weight: 600;">${cert.notAfter ? new Date(cert.notAfter).toLocaleDateString('pt-BR') : '—'}</span></div>
-        <div>🏷️ Tipo: <span style="color: var(--color-neutral-300);">${cert.tipo}</span></div>
+      <div style="padding: var(--space-3); background: var(--surface-glass); border-radius: var(--radius-md); border: 1px solid var(--surface-glass-border); min-width: 200px; flex-shrink: 0;">
+        <div style="font-size: var(--text-xs); color: var(--color-neutral-500); text-transform: uppercase; margin-bottom: var(--space-2); font-weight: 600;">Validade</div>
+        <div style="display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-xs);">
+          <div style="display: flex; justify-content: space-between; gap: var(--space-4);">
+            <span style="color: var(--color-neutral-500);">Início</span>
+            <span style="color: var(--color-neutral-300); font-weight: 500;">${cert.notBefore ? new Date(cert.notBefore).toLocaleDateString('pt-BR') : '—'}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: var(--space-4);">
+            <span style="color: var(--color-neutral-500);">Fim</span>
+            <span style="color: ${statusColor}; font-weight: 600;">${cert.notAfter ? new Date(cert.notAfter).toLocaleDateString('pt-BR') : '—'}</span>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -630,7 +679,7 @@ function renderContribView(c) {
   }
   return `
     <div class="grid grid-2 gap-4">
-      <div><span class="text-muted" style="font-size: var(--text-xs);">CNPJ:</span> <span class="text-mono" style="font-weight: 600;">${c.cnpj || '—'}</span></div>
+      <div><span class="text-muted" style="font-size: var(--text-xs);">CNPJ:</span> <span class="text-mono" style="font-weight: 600;">${c.cnpj ? maskCNPJ(c.cnpj) : '—'}</span></div>
       <div><span class="text-muted" style="font-size: var(--text-xs);">Razão Social:</span> <span style="font-weight: 600; color: var(--color-neutral-100);">${c.razaoSocial || '—'}</span></div>
       <div><span class="text-muted" style="font-size: var(--text-xs);">Nome Fantasia:</span> <span>${c.nomeFantasia || '—'}</span></div>
       <div><span class="text-muted" style="font-size: var(--text-xs);">Inscrição Municipal:</span> <span class="text-mono">${c.inscMunicipal || '—'}</span></div>
@@ -645,7 +694,7 @@ function renderContribEdit(c) {
     <div class="form-row mb-4">
       <div class="form-group">
         <label class="form-label">CNPJ <span class="required">*</span></label>
-        <input class="form-input form-input-mono" id="cfg-cnpj" type="text" maxlength="18" placeholder="00.000.000/0000-00" value="${c.cnpj || ''}">
+        <input class="form-input form-input-mono" id="cfg-cnpj" type="text" maxlength="18" placeholder="00.000.000/0000-00" value="${c.cnpj ? maskCNPJ(c.cnpj) : ''}">
       </div>
       <div class="form-group">
         <label class="form-label">Razão Social <span class="required">*</span></label>
@@ -709,6 +758,10 @@ function renderAmbView(settings) {
       </div>
       <div><span class="text-muted" style="font-size: var(--text-xs);">SEFIN:</span> <span class="text-mono" style="font-size: var(--text-sm);">${sefin}</span></div>
       <div><span class="text-muted" style="font-size: var(--text-xs);">ADN:</span> <span class="text-mono" style="font-size: var(--text-sm);">${adn}</span></div>
+      <div style="grid-column: 1 / -1;">
+        <span class="text-muted" style="font-size: var(--text-xs);">E-MAIL REMETENTE DAS NOTIFICAÇÕES:</span> 
+        <span style="font-size: var(--text-sm); color: var(--color-neutral-200); margin-left: var(--space-2);">${settings.emailNotificacoes || 'Não configurado'}</span>
+      </div>
     </div>`;
 }
 

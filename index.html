@@ -14,10 +14,10 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
 </head>
 <body>
-  <div class="app-shell" id="app-shell">
+  <div class="app-shell" id="app-shell" style="display: block;">
 
     <!-- ─── Sidebar ──────────────────────────────────── -->
-    <aside class="sidebar" id="sidebar">
+    <aside class="sidebar hidden" id="sidebar">
       <!-- Brand -->
       <div class="sidebar-brand">
         <div class="sidebar-brand-logo">N</div>
@@ -44,12 +44,22 @@
 
         <button class="nav-item" data-route="/consulta-nfse" id="nav-consulta-nfse">
           <span class="nav-item-icon">🔍</span>
-          <span class="nav-item-text">Consulta NFS-e</span>
+          <span class="nav-item-text">Consulta Nacional</span>
+        </button>
+
+        <button class="nav-item" data-route="/minhas-notas" id="nav-minhas-notas">
+          <span class="nav-item-icon">📚</span>
+          <span class="nav-item-text">Minhas Notas (Local)</span>
         </button>
 
         <button class="nav-item" data-route="/eventos" id="nav-eventos">
           <span class="nav-item-icon">📋</span>
           <span class="nav-item-text">Eventos</span>
+        </button>
+
+        <button class="nav-item" data-route="/guias" id="nav-guias">
+          <span class="nav-item-icon">📄</span>
+          <span class="nav-item-text">Guias de Recolhimento</span>
         </button>
 
         <div class="sidebar-section-label">Avançado</div>
@@ -72,6 +82,11 @@
 
         <div class="sidebar-section-label">Sistema</div>
 
+        <button class="nav-item" data-route="/gestao-acessos" id="nav-gestao-acessos">
+          <span class="nav-item-icon">👥</span>
+          <span class="nav-item-text">Gestão de Acessos</span>
+        </button>
+
         <button class="nav-item" data-route="/configuracoes" id="nav-configuracoes">
           <span class="nav-item-icon">⚙️</span>
           <span class="nav-item-text">Configurações</span>
@@ -80,18 +95,18 @@
 
       <!-- Footer -->
       <div class="sidebar-footer">
-        <div class="sidebar-user">
-          <div class="sidebar-user-avatar">CA</div>
+        <div class="sidebar-user" id="sidebar-user-block">
+          <div class="sidebar-user-avatar" id="sidebar-user-avatar">CA</div>
           <div class="sidebar-user-info">
-            <div class="sidebar-user-name">Claudio Admin</div>
-            <div class="sidebar-user-role">Administrador</div>
+            <div class="sidebar-user-name" id="sidebar-user-name">Claudio Admin</div>
+            <div class="sidebar-user-role" id="sidebar-user-role">Administrador Master</div>
           </div>
         </div>
       </div>
     </aside>
 
     <!-- ─── Header ──────────────────────────────────── -->
-    <header class="header" id="header">
+    <header class="header hidden" id="header">
       <div class="header-left">
         <button class="header-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
           ☰
@@ -109,6 +124,9 @@
         <button class="btn btn-ghost btn-icon header-notification" aria-label="Notificações" id="btn-notifications">
           🔔
           <span class="notif-dot"></span>
+        </button>
+        <button class="btn btn-ghost" style="color: var(--color-danger-400); margin-left: 8px;" id="btn-logout">
+          <i class="fas fa-sign-out-alt"></i> Sair
         </button>
       </div>
     </header>

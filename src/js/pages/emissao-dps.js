@@ -7,9 +7,11 @@ import { ENUMS, maskCNPJ, maskCPF, maskCEP, maskPhone, maskCurrency, validateCNP
 import { toast } from '../toast.js';
 import { buildDPSXml, collectDPSFormData, validateDPSForm, prettyPrintXml, downloadXml } from '../xml-builder.js';
 import { getCertStore, signXml } from '../digital-signature.js';
-import { safeFetch, enviarDPS } from '../api-service.js';
+import { safeFetch, enviarDPS, consultarCNPJ } from '../api-service.js';
+import { getSession } from '../auth.js';
 
 export function renderEmissaoDPS(container) {
+  const session = getSession();
   container.innerHTML = `
     <div class="page-header animate-slide-up">
       <div>
@@ -106,7 +108,6 @@ export function renderEmissaoDPS(container) {
       </div>
     </div>
 
-    <!-- TAB: Prestador -->
     <div class="card animate-slide-up tab-content hidden" id="tab-prestador">
       <div class="card-header">
         <h3 class="card-title">
@@ -126,18 +127,18 @@ export function renderEmissaoDPS(container) {
           </div>
           <div class="form-group">
             <label class="form-label">CNPJ/CPF <span class="required">*</span></label>
-            <input class="form-input form-input-mono" id="prest-doc" type="text" placeholder="00.000.000/0000-00">
+            <input class="form-input form-input-mono" id="prest-doc" type="text" placeholder="00.000.000/0000-00" value="${session?.cnpj || ''}">
           </div>
           <div class="form-group">
             <label class="form-label">Inscrição Municipal</label>
-            <input class="form-input form-input-mono" id="prest-IM" type="text" maxlength="15">
+            <input class="form-input form-input-mono" id="prest-IM" type="text" maxlength="15" value="12345">
           </div>
         </div>
 
         <div class="form-row mb-4">
           <div class="form-group" style="grid-column: 1 / -1;">
             <label class="form-label">Razão Social <span class="required">*</span></label>
-            <input class="form-input" id="prest-xNome" type="text" maxlength="300">
+            <input class="form-input" id="prest-xNome" type="text" maxlength="300" value="${session?.name || ''}">
           </div>
         </div>
 
@@ -417,6 +418,11 @@ export function renderEmissaoDPS(container) {
             <select class="form-select" id="val-CSTPC">
               ${Object.entries(ENUMS.cstPisCofins).map(([k, v]) => `<option value="${k}">${k} — ${v}</option>`).join('')}
             </select>
+            <div style="margin-top: 8px;">
+               <label style="font-size: 0.8rem; color: var(--color-neutral-400); display: flex; align-items: center; gap: 5px;">
+                 <input type="checkbox" id="val-cst-comercio"> Exibir CSTs residuais (Regimes Mistas / Comércio)
+               </label>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Tipo Retenção PIS/COFINS/CSLL</label>
@@ -871,7 +877,35 @@ export function renderEmissaoDPS(container) {
     </div>
   `;
 
-  // ─── Tab switching ────────────────────────────────
+  // ─── Setup Events ────────────────────────────────────────────────
+  
+  // Toggle Comércio CSTs
+  const cstComercioChk = document.getElementById('val-cst-comercio');
+  const cstSelect = document.getElementById('val-CSTPC');
+  if (cstComercioChk && cstSelect) {
+    cstComercioChk.addEventListener('change', (e) => {
+      const showAll = e.target.checked;
+      const currentVal = cstSelect.value;
+      let optionsHtml = '';
+      
+      let combined = { ...ENUMS.cstPisCofins };
+      if (showAll) {
+        combined = { ...combined, ...ENUMS.cstPisCofinsComercio };
+      }
+      
+      // Sort keys to maintain order
+      const sortedKeys = Object.keys(combined).sort();
+      sortedKeys.forEach(k => {
+         optionsHtml += `<option value="${k}">${k} — ${combined[k]}</option>`;
+      });
+      
+      cstSelect.innerHTML = optionsHtml;
+      if (combined[currentVal]) {
+         cstSelect.value = currentVal;
+      }
+    });
+  }
+
   setupTabs();
   setupMasks();
   setupConditionalFields();
@@ -906,6 +940,7 @@ function setupMasks() {
         prestDoc.value = maskCPF(prestDoc.value);
       }
     });
+    prestDoc.addEventListener('blur', () => setupCNPJAutoFill('prest', prestDoc, prestTipo));
   }
 
   // CEP masks
@@ -933,6 +968,67 @@ function setupMasks() {
         tomaDoc.value = maskCPF(tomaDoc.value);
       }
     });
+    tomaDoc.addEventListener('blur', () => setupCNPJAutoFill('toma', tomaDoc, tomaTipo));
+  }
+
+  // CNPJ/CPF mask for intermediário
+  const interDoc = document.getElementById('inter-doc');
+  const interTipo = document.getElementById('inter-tipoDoc');
+  if (interDoc && interTipo) {
+    interDoc.addEventListener('input', () => {
+      if (interTipo.value === 'CNPJ') {
+        interDoc.value = maskCNPJ(interDoc.value);
+      } else if (interTipo.value === 'CPF') {
+        interDoc.value = maskCPF(interDoc.value);
+      }
+    });
+    interDoc.addEventListener('blur', () => setupCNPJAutoFill('inter', interDoc, interTipo));
+  }
+
+  // CNPJ/CPF mask for destinatário
+  const destDoc = document.getElementById('dest-doc');
+  const destTipo = document.getElementById('dest-tipoDoc');
+  if (destDoc && destTipo) {
+    destDoc.addEventListener('input', () => {
+      if (destTipo.value === 'CNPJ') {
+        destDoc.value = maskCNPJ(destDoc.value);
+      } else if (destTipo.value === 'CPF') {
+        destDoc.value = maskCPF(destDoc.value);
+      }
+    });
+    destDoc.addEventListener('blur', () => setupCNPJAutoFill('dest', destDoc, destTipo));
+  }
+}
+
+async function setupCNPJAutoFill(prefix, docElement, tipoElement) {
+  const val = docElement.value.replace(/\D/g, '');
+  const tipo = tipoElement.value;
+  
+  if (val.length === 14 && (tipo === 'CNPJ' || tipo === '1')) {
+    toast.info(`Consultando CNPJ do ${prefix} na base nacional...`);
+    try {
+      const data = await consultarCNPJ(val);
+      
+      const setField = (suffix, value) => {
+        const el = document.getElementById(`${prefix}-${suffix}`);
+        if (el) el.value = value || '';
+      };
+      
+      setField('xNome', data.razaoSocial);
+      setField('xFant', data.fantasia);
+      setField('CEP', data.cep ? maskCEP(data.cep) : '');
+      setField('xLgr', data.logradouro);
+      setField('nro', data.numero);
+      setField('xCpl', data.complemento);
+      setField('xBairro', data.bairro);
+      setField('cMun', data.codigoIbge);
+      setField('email', data.email);
+      setField('fone', data.telefone ? maskPhone(data.telefone.split('/')[0].trim()) : '');
+      
+      toast.success(`Dados do CNPJ aplicados com sucesso!`);
+    } catch (err) {
+      toast.warning('Atenção: Consulta ao CNPJ indisponível ou limite excedido. Preencha manualmente.');
+    }
   }
 }
 

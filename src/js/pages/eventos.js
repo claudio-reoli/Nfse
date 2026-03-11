@@ -452,7 +452,9 @@ function renderBloqueioForm(container) {
               <option value="e204104">Cancelamento por Ofício</option>
             </select>
           </div>
-          <div class="form-group">
+        </div>
+        <div class="form-row mb-4">
+          <div class="form-group" style="grid-column: 1 / -1;">
             <label class="form-label">Motivo <span class="required">*</span></label>
             <input class="form-input" id="bloq-motivo" type="text" maxlength="255" placeholder="Mín. 15 caracteres">
           </div>

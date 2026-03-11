@@ -51,10 +51,15 @@ export class Router {
       '/dashboard': 'Dashboard',
       '/emissao-dps': 'Emissão de DPS',
       '/consulta-nfse': 'Consulta NFS-e',
+      '/minhas-notas': 'Minhas Notas',
       '/eventos': 'Eventos',
+      '/guias': 'Guias de Recolhimento',
       '/decisao-judicial': 'Decisão Judicial',
+      '/adn': 'Integração ADN',
       '/parametros': 'Parâmetros Municipais',
+      '/gestao-acessos': 'Gestão de Acessos',
       '/configuracoes': 'Configurações',
+      '/consulta-notas': 'Notas Importadas (ADN)',
     };
     return titles[hash] || 'Página';
   }
