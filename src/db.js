@@ -261,6 +261,15 @@ export async function insertNotas(notas) {
   }
 }
 
+export async function updateNotaStatus(chaveAcesso, status) {
+  const chave = String(chaveAcesso || '').replace(/\D/g, '');
+  if (!chave) return;
+  await pool.query(
+    "UPDATE notas SET status = $1 WHERE regexp_replace(chave_acesso, '[^0-9]', '', 'g') = $2 OR chave_acesso = $2",
+    [status, chave]
+  );
+}
+
 // ─── Apurações ───────────────────────────────────────────────────────────────
 
 export async function getApuracoesByCnpj(cnpj) {
@@ -329,6 +338,75 @@ export async function updateApuracao(id, data) {
   vals.push(id);
   await pool.query(`UPDATE apuracoes SET ${updates.join(', ')} WHERE id = $${i}`, vals);
   return await getApuracaoById(id);
+}
+
+// ─── Contribuinte Sync State (ADN) ────────────────────────────────────────────
+
+export async function getContribuinteMaxNsu(cnpj) {
+  const r = await pool.query(
+    'SELECT ultimo_nsu FROM contribuinte_sync_state WHERE cnpj = $1',
+    [cnpj.replace(/\D/g, '')]
+  );
+  return r.rows[0]?.ultimo_nsu ?? 0;
+}
+
+export async function updateContribuinteMaxNsu(cnpj, nsu) {
+  await pool.query(
+    `INSERT INTO contribuinte_sync_state (cnpj, ultimo_nsu, atualizado_em)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (cnpj) DO UPDATE SET ultimo_nsu = $2, atualizado_em = NOW()`,
+    [cnpj.replace(/\D/g, ''), nsu]
+  );
+}
+
+// ─── Rate-limit ADN (1h quando sem docs novos) ────────────────────────────────
+
+export async function getLastEmptySyncAt() {
+  const r = await pool.query(
+    "SELECT last_empty_sync_at FROM sync_state WHERE id = 1"
+  );
+  return r.rows[0]?.last_empty_sync_at ?? null;
+}
+
+export async function setLastEmptySyncAt() {
+  await pool.query(
+    'UPDATE sync_state SET last_empty_sync_at = NOW() WHERE id = 1'
+  );
+}
+
+export async function clearLastEmptySyncAt() {
+  await pool.query(
+    'UPDATE sync_state SET last_empty_sync_at = NULL WHERE id = 1'
+  );
+}
+
+// ─── Decisão Judicial ────────────────────────────────────────────────────────
+
+export async function getDecisaoJudicialByCnpj(cnpj) {
+  const r = await pool.query(
+    'SELECT * FROM decisao_judicial WHERE cnpj_contribuinte = $1 AND ativo = true',
+    [cnpj.replace(/\D/g, '')]
+  );
+  return rowsToCamel(r.rows);
+}
+
+export async function insertDecisaoJudicial(data) {
+  await pool.query(
+    `INSERT INTO decisao_judicial (cnpj_contribuinte, numero_processo, tipo)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (cnpj_contribuinte, numero_processo) DO UPDATE SET ativo = true`,
+    [data.cnpj.replace(/\D/g, ''), data.numeroProcesso, data.tipo || 'judicial']
+  );
+}
+
+// ─── Contribuinte Regime (Simples/MEI) ────────────────────────────────────────
+
+export async function getContribuinteRegime(cnpj) {
+  const r = await pool.query(
+    'SELECT * FROM contribuinte_regime WHERE cnpj = $1',
+    [cnpj.replace(/\D/g, '')]
+  );
+  return rowToCamel(r.rows[0]);
 }
 
 // ─── Migrations ──────────────────────────────────────────────────────────────

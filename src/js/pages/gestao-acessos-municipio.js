@@ -4,7 +4,7 @@
 import { MUN_ROLES, isMunAuthorized } from '../auth-municipio.js';
 import { toast } from '../toast.js';
 import { maskCPF, maskPhone } from '../fiscal-utils.js';
-import { getBackendUrl, getUsers } from '../api-service.js';
+import { getBackendUrl, getUsers, cadastrarDecisaoJudicial } from '../api-service.js';
 
 const BASE_ROLES = [
   { value: 'GESTOR', label: MUN_ROLES.GESTOR },
@@ -56,6 +56,26 @@ export function renderGestaoAcessosMun(container) {
         </div>
         <div style="text-align: right;">
           <button class="btn btn-primary" id="btn-mun-save-user">Salvar Servidor</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card animate-slide-up mb-6">
+      <div class="card-header"><h3 class="card-title">Decisões Judiciais/Administrativas</h3></div>
+      <div class="card-body">
+        <p class="form-help" style="margin-bottom: var(--space-3);">Cadastre decisões que autorizam contribuintes a emitir NFS-e pelo fluxo bypass (cStat=102). O contribuinte deve solicitar ao município antes de emitir.</p>
+        <div class="grid grid-3 gap-4 mb-4">
+          <div class="form-group">
+            <label class="form-label">CNPJ do Contribuinte</label>
+            <input type="text" class="form-input form-input-mono" id="dec-cnpj" placeholder="00.000.000/0000-00" maxlength="18">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Número do Processo</label>
+            <input type="text" class="form-input" id="dec-processo" placeholder="Ex: 1234567-89.2026.8.26.0000">
+          </div>
+          <div class="form-group" style="display: flex; align-items: flex-end;">
+            <button class="btn btn-secondary" id="btn-dec-cadastrar">Cadastrar Decisão</button>
+          </div>
         </div>
       </div>
     </div>
@@ -122,6 +142,29 @@ export function renderGestaoAcessosMun(container) {
   });
   document.getElementById('mun-novo-celular')?.addEventListener('input', (e) => {
     e.target.value = maskPhone(e.target.value.replace(/\D/g, ''));
+  });
+
+  document.getElementById('dec-cnpj')?.addEventListener('input', (e) => {
+    let v = e.target.value.replace(/\D/g, '');
+    if (v.length > 14) v = v.substring(0, 14);
+    e.target.value = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  });
+
+  document.getElementById('btn-dec-cadastrar')?.addEventListener('click', async () => {
+    const cnpj = document.getElementById('dec-cnpj')?.value?.replace(/\D/g, '') || '';
+    const processo = document.getElementById('dec-processo')?.value?.trim() || '';
+    if (cnpj.length !== 14 || !processo) {
+      toast.warning('Informe CNPJ e número do processo.');
+      return;
+    }
+    try {
+      await cadastrarDecisaoJudicial({ cnpjContribuinte: cnpj, numeroProcesso: processo, tipo: 'judicial' });
+      toast.success('Decisão cadastrada com sucesso.');
+      document.getElementById('dec-cnpj').value = '';
+      document.getElementById('dec-processo').value = '';
+    } catch (err) {
+      toast.error(err.message || 'Falha ao cadastrar.');
+    }
   });
 
   async function loadUsers() {

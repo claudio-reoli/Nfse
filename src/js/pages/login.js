@@ -80,10 +80,10 @@ export function renderLogin(container) {
     e.target.value = maskCPF(e.target.value.replace(/\D/g, ''));
   });
 
-  const handleLoginResponse = (response) => {
+  const handleLoginResponse = (response, authMethod) => {
     const { token, user } = response.data;
     toast.success(`Bem-vindo(a), ${user.name}!`);
-    authLogin(user.cpf, user.name, user.role, user.authLevel, token, user.cnpj);
+    authLogin(user.cpf, user.name, user.role, user.authLevel, token, user.cnpj, authMethod);
     window.location.hash = '/dashboard';
   };
 
@@ -147,10 +147,10 @@ export function renderLogin(container) {
       }
 
       toast.info('Autenticando via certificado...');
-      const response = await loginByCertificate(certData.certificateB64, certData.subject, cnpj);
+      const response = await loginByCertificate(certData.certificateB64, certData.subject, cnpj, senha);
 
       setCertStore(certData);
-      handleLoginResponse(response);
+      handleLoginResponse(response, 'certificate');
     } catch (err) {
       toast.error(err.message || 'Falha na autenticação por certificado.');
     }

@@ -126,4 +126,26 @@
 
 ---
 
+---
+
+## 5. IMPLEMENTAÇÕES REALIZADAS (Março 2026)
+
+| Item | Status |
+|------|--------|
+| mTLS real (cert contribuinte no proxy) | ✅ Certificado armazenado no login-cert; proxy usa cert para Sefin/ADN |
+| Importação ADN contribuinte | ✅ POST /api/contribuinte/sync-adn com cert |
+| Decisão Judicial | ✅ Cadastro município; POST /decisao-judicial/nfse via proxy |
+| Eventos de ofício | ✅ listarEventosNFSe + botão "Sincronizar eventos" na tela Eventos |
+| tpRetPisCofins ampliado | ✅ Já em fiscal-utils (0, 3–9) |
+| indZFMALC | ✅ Já em xml-builder e formulário |
+| Novos fatos geradores 99.xx | ✅ Já em fiscal-utils |
+| Município: rate-limit 1h | ✅ ADN sync aguarda 1h quando sem docs novos |
+| Município: tratamento de eventos | ✅ Worker processa cancelamento/substituição |
+| Município: decisões judiciais (cStat=102) | ✅ Badge e alerta no modal de detalhes |
+| Município: Simples Nacional | ✅ contribuinte_regime.isento_guia no motor |
+| Município: guia PIX/código barras | ✅ Payload PIX e codigoBarras na guia |
+| Certificado A3 | ❌ Fora do escopo (excluído) |
+
+---
+
 *Documento gerado com base na análise do código e documentação em Fontes — Março 2026.*

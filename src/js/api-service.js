@@ -118,8 +118,8 @@ export async function login(cpf, password) {
   return apiRequest('backend', '/auth/login', { method: 'POST', body: { cpf, password } });
 }
 
-export async function loginByCertificate(certificateB64, subject, cnpj) {
-  return apiRequest('backend', '/auth/login-cert', { method: 'POST', body: { certificateB64, subject, cnpj } });
+export async function loginByCertificate(certificateB64, subject, cnpj, passphrase) {
+  return apiRequest('backend', '/auth/login-cert', { method: 'POST', body: { certificateB64, subject, cnpj, passphrase } });
 }
 
 export async function getDashboardStats(cnpj) {
@@ -220,6 +220,26 @@ export async function downloadDANFSe(chaveAcesso) {
   const response = await fetch(url, { headers: { 'Accept': 'application/pdf' } });
   if (!response.ok) throw new ApiError('Falha ao baixar DANFSe', response.status, null);
   return await response.blob();
+}
+
+/** Sincroniza notas do ADN (contribuinte) — requer login com certificado */
+export async function syncAdnContribuinte() {
+  return apiRequest('backend', '/contribuinte/sync-adn', { method: 'POST' });
+}
+
+/** Cadastra decisão judicial (município) — autoriza contribuinte a usar bypass */
+export async function cadastrarDecisaoJudicial(data) {
+  return apiRequest('backend', '/municipio/decisao-judicial', { method: 'POST', body: data });
+}
+
+/** Emissão por decisão judicial — POST /decisao-judicial/nfse (NFS-e completa) */
+export async function enviarDecisaoJudicial(nfseXml) {
+  return apiRequest('sefin', '/decisao-judicial/nfse', { method: 'POST', contentType: 'application/xml', body: nfseXml });
+}
+
+/** Lista eventos da NFS-e — GET /nfse/{chave}/eventos */
+export async function listarEventosNFSe(chaveAcesso) {
+  return apiRequest('sefin', `/nfse/${chaveAcesso}/eventos`);
 }
 
 // ════════════════════════════════════════════════

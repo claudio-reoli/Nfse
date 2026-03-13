@@ -156,6 +156,10 @@ export function renderConsultaNotasMun(container) {
 
     notas.forEach((n) => {
       const tr = document.createElement('tr');
+      const cStat = n.dadosGerais?.cStat || '';
+      const decisaoBadge = cStat === '102'
+        ? '<span class="badge badge-danger" style="font-size:0.7rem;" title="Decisão Judicial/Administrativa — homologação manual">⚠️ Decisão Judicial</span>'
+        : '';
       const fonteBadge = n._fonte === 'ADN'
         ? '<span class="badge badge-success" style="font-size:0.7rem;">ADN</span>'
         : '<span class="badge badge-warning" style="font-size:0.7rem;">Local</span>';
@@ -187,7 +191,9 @@ export function renderConsultaNotasMun(container) {
           <div>${aliq ? fmtPct(aliq) : '—'}</div>
           <div style="font-size:0.75rem;color:${retInfo.includes('Retido') && !retInfo.includes('Não') ? 'var(--color-danger-400)' : 'var(--color-success-400)'};">${retInfo || '—'}</div>
         </td>
-        <td style="text-align:center;">${fonteBadge}</td>
+        <td style="text-align:center;">
+          <div style="display:flex;flex-direction:column;gap:4px;align-items:center;">${fonteBadge}${decisaoBadge}</div>
+        </td>
         <td>
           <button class="btn btn-primary btn-sm btn-detalhes" data-chave="${chave}" title="Exibir todos os dados da nota agrupados por negócio">
             <i class="fas fa-file-invoice"></i> Ver dados completos
@@ -238,6 +244,11 @@ export function renderConsultaNotasMun(container) {
     const isRetido = ti.tpRetISSQN === '2' || ti.tpRetISSQN === '3' || n.issRetidoFonte;
 
     let html = '';
+    if (g.cStat === '102') {
+      html += `<div style="margin-bottom:14px;padding:12px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:var(--radius-md);color:var(--color-danger-400);font-weight:600;">
+        ⚠️ Decisão Judicial/Administrativa — Esta NFS-e foi emitida pelo fluxo bypass (cStat=102). Exige homologação manual no fim do mês.
+      </div>`;
+    }
 
     html += `<div style="margin-bottom:14px;">
       <span style="font-size:0.75rem;color:var(--color-neutral-400);">CHAVE DE ACESSO PADRÃO NACIONAL</span><br>

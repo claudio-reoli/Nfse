@@ -610,6 +610,15 @@ async function syncNfsFromAdn() {
     return { maxNsu: currentMax, novaNotas: 0, fonte: 'erro', erro: 'Certificado municipal ICP-Brasil não configurado. A API ADN exige mTLS. Envie o certificado em Configurações > Certificado.' };
   }
 
+  const lastEmpty = await db.getLastEmptySyncAt();
+  if (lastEmpty) {
+    const diff = (Date.now() - new Date(lastEmpty).getTime()) / 1000 / 60;
+    if (diff < 60) {
+      console.log(`[ ADN Worker ] Rate-limit: aguardando 1h desde último sync vazio (${Math.round(60 - diff)} min restantes).`);
+      return { maxNsu, novaNotas: 0, fonte: 'rate_limit', aviso: 'Aguardando 1 hora desde último sync sem documentos.' };
+    }
+  }
+
   console.log(`[ ADN Worker ] Varredura a partir do NSU: ${maxNsu}...`);
   console.log(`[ ADN Worker ] Município: ${config.nome || IBGE_MUNICIPIO} | CNPJ: ${config.cnpj || 'N/A'}`);
   console.log(`[ ADN Worker ] Ambiente: ${ambLabel} (${ambiente}) | URL base: ${adnBaseUrl}`);
@@ -704,8 +713,14 @@ async function syncNfsFromAdn() {
 
     if (!Array.isArray(docs) || docs.length === 0) {
       console.log('[ ADN Worker ] Nenhum documento novo retornado pela ADN.');
+      const maxNsuRet = payload.maxNSU ?? payload.MaxNSU ?? maxNsu;
+      if (maxNsuRet === maxNsu) {
+        await db.setLastEmptySyncAt();
+      }
       return { maxNsu, novaNotas: 0, fonte: 'ADN', resposta: respStatus };
     }
+
+    await db.clearLastEmptySyncAt();
 
     console.log(`[ ADN Worker ] ${docs.length} documentos recebidos. Processando...`);
 
@@ -716,6 +731,23 @@ async function syncNfsFromAdn() {
 
     for (const doc of docs) {
       try {
+        const tipoDoc = (doc.TipoDocumento || doc.tipoDocumento || '').toUpperCase();
+        if (tipoDoc === 'EVENTO' || (doc.ArquivoXml && decodeArquivoXml(doc.ArquivoXml || '')?.includes('tpEvento'))) {
+          const xmlStr = doc.ArquivoXml ? decodeArquivoXml(doc.ArquivoXml) : null;
+          const chaveRef = doc.ChaveAcesso || doc.chaveAcesso || (xmlStr && xmlTagValue(xmlStr, 'chNFSe'));
+          const tpEvento = doc.tpEvento || (xmlStr && xmlTagValue(xmlStr, 'tpEvento'));
+          if (chaveRef && (tpEvento === 'e101101' || tpEvento === 'e204101' || tpEvento === 'e204104')) {
+            await db.updateNotaStatus(chaveRef, 'Cancelada');
+            console.log(`[ ADN Worker ] Evento cancelamento aplicado: ${chaveRef}`);
+          } else if (chaveRef && tpEvento === 'e101103') {
+            await db.updateNotaStatus(chaveRef, 'Substituída');
+            console.log(`[ ADN Worker ] Evento substituição aplicado: ${chaveRef}`);
+          }
+          const docNsu = Number(doc.NSU || 0);
+          if (docNsu > maxNsuRecebido) maxNsuRecebido = docNsu;
+          continue;
+        }
+
         let nota = null;
         if (doc.ArquivoXml) {
           const xmlStr = decodeArquivoXml(doc.ArquivoXml);
@@ -827,7 +859,11 @@ async function gerarApuracaoMensal(competenciaDesejada) {
   });
 
   const lotesFechados = Object.values(consolidadoPorCnpj);
-  for (const apu of lotesFechados) await db.upsertApuracao(apu);
+  for (const apu of lotesFechados) {
+    const regime = await db.getContribuinteRegime(apu.cnpj);
+    if (regime?.isentoGuia) continue;
+    await db.upsertApuracao(apu);
+  }
   return lotesFechados;
 }
 
@@ -898,7 +934,7 @@ app.post('/api/auth/login', rateLimit(60000, 10), async (req, res) => {
 });
 
 app.post('/api/auth/login-cert', rateLimit(60000, 10), async (req, res) => {
-  const { certificateB64, subject, cnpj } = req.body;
+  const { certificateB64, subject, cnpj, passphrase } = req.body;
   if (!certificateB64 || !subject) {
     return res.status(400).json({ error: 'Dados do certificado são obrigatórios' });
   }
@@ -922,6 +958,16 @@ app.post('/api/auth/login-cert', rateLimit(60000, 10), async (req, res) => {
     JWT_SECRET,
     { expiresIn: '8h' }
   );
+
+  // Armazena certificado para mTLS (Sefin/ADN)
+  try {
+    const pfxBuf = Buffer.from(certificateB64, 'base64');
+    const { keyPem, certPem } = convertPfxToPem(pfxBuf, passphrase || '');
+    contribuinteCertCache.set(token, { keyPem, certPem });
+    setTimeout(() => contribuinteCertCache.delete(token), 8 * 60 * 60 * 1000);
+  } catch (certErr) {
+    console.warn('[ Auth ] Certificado não convertido para mTLS:', certErr.message);
+  }
 
   res.json({
     token,
@@ -956,8 +1002,14 @@ app.use('/api/proxy', async (req, res) => {
   const baseUrl = AMBIENTES[env][api];
   const targetUrl = restOfPath ? `${baseUrl}/${restOfPath}` : baseUrl;
 
+  let agent = loadCertAgent();
+  const token = req.headers.authorization?.split(' ')[1];
+  if (token && contribuinteCertCache.has(token)) {
+    const { keyPem, certPem } = contribuinteCertCache.get(token);
+    agent = new https.Agent({ key: keyPem, cert: certPem, rejectUnauthorized: false });
+  }
+
   try {
-    const agent = loadCertAgent();
     const response = await axios({
       method: req.method,
       url: targetUrl,
@@ -1182,8 +1234,11 @@ app.post('/api/municipio/gerar-guia/:id', async (req, res) => {
   const vencimento = new Date();
   vencimento.setDate(vencimento.getDate() + 15);
 
+  const valorStr = valorTotal.toFixed(2).replace('.', '').padStart(11, '0');
+  const txid = `NFSE${apu.id.replace(/\D/g, '').padStart(25, '0')}`.substring(0, 25);
   const guia = {
-    pixPayload: `00020126580014br.gov.bcb.pix0136${apu.id}5204000053039865404${valorTotal.toFixed(2)}5802BR`,
+    pixPayload: `00020126580014br.gov.bcb.pix0136${txid}520400005303986540${valorStr}5802BR5925NFSe Freire - ISSQN6009SAO PAULO62070503***6304`,
+    codigoBarras: `8581000000${valorStr}${apu.id.replace(/\D/g, '').substring(0, 10).padStart(10, '0')}`,
     dataVencimento: vencimento.toISOString().slice(0, 10),
     valor: valorTotal
   };
@@ -1197,6 +1252,73 @@ app.post('/api/municipio/pagar-guia/:id', async (req, res) => {
   if (!apu) return res.status(404).json({ error: 'Apuração não encontrada' });
 
   await db.updateApuracao(req.params.id, { status: 'Paga', dataPagamento: new Date().toISOString() });
+  res.json({ sucesso: true });
+});
+
+// ==========================================
+// ROTAS: Contribuinte — Sync ADN, Decisão Judicial
+// ==========================================
+
+app.post('/api/contribuinte/sync-adn', authenticate, async (req, res) => {
+  const user = req.user;
+  if (user.userType !== 'contribuinte' || !user.cnpj) {
+    return res.status(403).json({ error: 'Acesso restrito a contribuintes com CNPJ vinculado.' });
+  }
+  const cnpj = String(user.cnpj).replace(/\D/g, '');
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token || !contribuinteCertCache.has(token)) {
+    return res.status(400).json({ error: 'Faça login com certificado digital para sincronizar com o ADN.' });
+  }
+  const { keyPem, certPem } = contribuinteCertCache.get(token);
+  const agent = new https.Agent({ key: keyPem, cert: certPem, rejectUnauthorized: false });
+  const config = await db.getConfig();
+  const env = config.ambiente || 'sandbox';
+  const baseAdn = AMBIENTES[env].adn;
+  const ultNsu = await db.getContribuinteMaxNsu(cnpj);
+
+  try {
+    const url = `${baseAdn}/DFe/${ultNsu}`;
+    const resp = await axios({ method: 'GET', url, httpsAgent: agent, timeout: 20000 });
+    const payload = resp.data;
+    let docs = payload.LoteDFe || payload.resDFe || payload.documentos || [];
+    if (!Array.isArray(docs)) docs = Object.values(docs).filter(Boolean);
+    let maxNsu = ultNsu;
+    let importadas = 0;
+    const { chaves, nsus } = await db.existingChavesAndNsus();
+    for (const doc of docs) {
+      const nsu = Number(doc.NSU || 0);
+      if (nsu > maxNsu) maxNsu = nsu;
+      if (!doc.ArquivoXml) continue;
+      const xmlStr = decodeArquivoXml(doc.ArquivoXml);
+      const nota = parseNfseXml(xmlStr, doc);
+      if (!nota || !nota.chaveAcesso) continue;
+      const prestCnpj = (nota.prestador?.CNPJ || nota.prestador?.cnpj || '').replace(/\D/g, '');
+      const tomCnpj = (nota.tomador?.CNPJ || nota.tomador?.cnpj || '').replace(/\D/g, '');
+      if (prestCnpj !== cnpj && tomCnpj !== cnpj) continue;
+      if (chaves.has(nota.chaveAcesso) || nsus.has(nota.nsu)) continue;
+      await db.insertNota(nota);
+      chaves.add(nota.chaveAcesso);
+      nsus.add(nota.nsu);
+      importadas++;
+    }
+    await db.updateContribuinteMaxNsu(cnpj, maxNsu);
+    res.json({ sucesso: true, importadas, maxNsu });
+  } catch (err) {
+    const status = err.response?.status || 500;
+    const msg = err.response?.data?.xMotivo || err.response?.data?.error || err.message;
+    res.status(status).json({ error: msg || 'Falha ao sincronizar com ADN.' });
+  }
+});
+
+app.post('/api/municipio/decisao-judicial', authenticate, async (req, res) => {
+  if (req.user.userType !== 'municipio') {
+    return res.status(403).json({ error: 'Apenas usuários do município podem cadastrar decisões.' });
+  }
+  const { cnpjContribuinte, numeroProcesso, tipo } = req.body;
+  if (!cnpjContribuinte || !numeroProcesso) {
+    return res.status(400).json({ error: 'CNPJ do contribuinte e número do processo são obrigatórios.' });
+  }
+  await db.insertDecisaoJudicial({ cnpj: cnpjContribuinte, numeroProcesso, tipo });
   res.json({ sucesso: true });
 });
 
@@ -1306,6 +1428,9 @@ app.put('/api/municipio/config', async (req, res) => {
 });
 
 const MUN_CERT_PATH = './data/municipio-cert.pfx';
+
+// Cache de certificados de contribuintes (token -> { keyPem, certPem }) para mTLS
+const contribuinteCertCache = new Map();
 const MUN_KEY_PEM_PATH = './data/municipio-key.pem';
 const MUN_CERT_PEM_PATH = './data/municipio-cert.pem';
 let _munCertPassphrase = '';

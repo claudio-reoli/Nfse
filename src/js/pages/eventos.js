@@ -5,7 +5,7 @@
  */
 import { ENUMS } from '../fiscal-utils.js';
 import { toast } from '../toast.js';
-import { safeFetch, registrarEvento } from '../api-service.js';
+import { safeFetch, registrarEvento, listarEventosNFSe } from '../api-service.js';
 
 export function renderEventos(container) {
   container.innerHTML = `
@@ -72,13 +72,16 @@ export function renderEventos(container) {
     <div class="card animate-slide-up mt-6">
       <div class="card-header">
         <h3 class="card-title">Eventos Recentes</h3>
-        <div style="display: flex; gap: var(--space-2);">
+        <div style="display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center;">
           <input class="form-input form-input-mono" id="evt-filtro-chave" type="text" maxlength="50"
                  placeholder="Filtrar por chave de acesso..." style="width: 280px; font-size: var(--text-xs);">
           <select class="form-select" id="evt-filtro-tipo" style="width: 180px; font-size: var(--text-xs);">
             <option value="">Todos os tipos</option>
             ${Object.entries(ENUMS.tpEvento).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}
           </select>
+          <button class="btn btn-secondary btn-sm" id="evt-btn-sync-sefin" title="Buscar eventos de ofício na Sefin (GET /nfse/{chave}/eventos)">
+            📥 Sincronizar eventos (Sefin)
+          </button>
         </div>
       </div>
       <div class="card-body" style="padding: 0; overflow-x: auto;">
@@ -164,6 +167,38 @@ export function renderEventos(container) {
   // ─── Cancelamento por Ofício ───────────
   document.getElementById('evt-oficio')?.addEventListener('click', () => {
     renderOficioForm(formContainer);
+  });
+
+  // ─── Sincronizar eventos (GET /nfse/{chave}/eventos) ───────────
+  document.getElementById('evt-btn-sync-sefin')?.addEventListener('click', async () => {
+    const chave = document.getElementById('evt-filtro-chave')?.value?.replace(/\D/g, '') || '';
+    if (chave.length !== 50) {
+      toast.warning('Informe a chave de acesso (50 dígitos) para buscar eventos.');
+      return;
+    }
+    try {
+      toast.info('Buscando eventos na Sefin...');
+      const res = await listarEventosNFSe(chave);
+      const eventos = res?.data?.eventos || res?.data || [];
+      const tbody = document.getElementById('evt-table-body');
+      if (Array.isArray(eventos) && eventos.length > 0) {
+        tbody.innerHTML = eventos.map(ev => `
+          <tr>
+            <td><span class="badge badge-primary">${ev.tpEvento || ev.tipo || '—'}</span></td>
+            <td class="cell-mono">${(ev.chNFSe || chave).substring(0, 20)}...${(ev.chNFSe || chave).slice(-10)}</td>
+            <td>${ev.autor || '—'}</td>
+            <td>${ev.dhEvento ? new Date(ev.dhEvento).toLocaleDateString('pt-BR') : '—'}</td>
+            <td><span class="badge badge-success">Sefin</span></td>
+          </tr>
+        `).join('');
+        toast.success(`${eventos.length} evento(s) encontrado(s).`);
+      } else {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhum evento retornado pela Sefin para esta chave.</td></tr>';
+        toast.info('Nenhum evento encontrado.');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Falha ao buscar eventos.');
+    }
   });
 }
 

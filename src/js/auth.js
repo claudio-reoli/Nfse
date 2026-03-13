@@ -27,7 +27,7 @@ export function getSession() {
   }
 }
 
-export function login(cpf, name, role, authLevel, token, cnpj) {
+export function login(cpf, name, role, authLevel, token, cnpj, authMethod) {
   const session = {
     cpf,
     name,
@@ -35,6 +35,7 @@ export function login(cpf, name, role, authLevel, token, cnpj) {
     authLevel,
     token,
     cnpj,
+    authMethod: authMethod || null,
     loginTime: new Date().toISOString()
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(session));

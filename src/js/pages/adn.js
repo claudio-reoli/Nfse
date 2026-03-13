@@ -3,7 +3,7 @@
  * Distribuição por NSU, compartilhamento de DF-e, DANFSe
  */
 import { toast } from '../toast.js';
-import { safeFetch, distribuicaoDFe, ultimoNSU, adnEventos } from '../api-service.js';
+import { safeFetch, distribuicaoDFe, ultimoNSU, adnEventos, syncAdnContribuinte } from '../api-service.js';
 import { openDANFSe } from '../danfse-generator.js';
 
 export function renderADN(container) {
@@ -100,16 +100,35 @@ export function renderADN(container) {
     </div>
   `;
 
-  // ─── Sync NSU ───────────────────────────────
+  // ─── Sync NSU / Importar do ADN ───────────────────────────────
   document.getElementById('btn-sync-nsu')?.addEventListener('click', async () => {
+    const session = JSON.parse(localStorage.getItem('nfse_session') || '{}');
+    const hasCert = session.authMethod === 'certificate';
+    if (hasCert && session.token) {
+      toast.info('Importando notas do ADN (certificado)...');
+      try {
+        const res = await syncAdnContribuinte();
+        const data = res.data;
+        if (data.sucesso) {
+          document.getElementById('adn-ultNSU').textContent = data.maxNsu.toLocaleString('pt-BR');
+          document.getElementById('adn-pending').textContent = '0';
+          toast.success(`✅ ${data.importadas || 0} nota(s) importada(s). NSU: ${data.maxNsu}`);
+        } else {
+          toast.error(data.error || 'Falha na importação');
+        }
+      } catch (err) {
+        toast.error(err.message || 'Falha na importação');
+      }
+      return;
+    }
     toast.info('Consultando último NSU no ADN...');
     try {
       const response = await safeFetch(ultimoNSU);
       if (response.ok) {
-        document.getElementById('adn-ultNSU').textContent = response.data.ultNSU.toLocaleString('pt-BR');
-        document.getElementById('adn-maxNSU').textContent = response.data.maxNSU.toLocaleString('pt-BR');
-        document.getElementById('adn-pending').textContent = (response.data.maxNSU - response.data.ultNSU).toLocaleString('pt-BR');
-        toast.success(`✅ NSU atualizado! Último: ${response.data.ultNSU}, Máximo: ${response.data.maxNSU}`);
+        document.getElementById('adn-ultNSU').textContent = response.data.ultNSU?.toLocaleString('pt-BR') ?? '—';
+        document.getElementById('adn-maxNSU').textContent = response.data.maxNSU?.toLocaleString('pt-BR') ?? '—';
+        document.getElementById('adn-pending').textContent = ((response.data.maxNSU || 0) - (response.data.ultNSU || 0)).toLocaleString('pt-BR');
+        toast.success(`✅ NSU atualizado! Faça login com certificado para importar notas.`);
       }
     } catch (err) {
       toast.error(`Falha: ${err.message}`);
