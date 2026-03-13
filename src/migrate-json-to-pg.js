@@ -58,6 +58,8 @@ async function migrate() {
         await db.insertUser({
           cpf: u.cpf,
           name: u.name,
+          email: u.email || '',
+          celular: u.celular || '',
           role: u.role,
           userType: u.userType || 'contribuinte',
           passwordHash: u.passwordHash,

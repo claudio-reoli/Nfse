@@ -1,8 +1,8 @@
-# Simple PowerShell HTTP Server for NFS-e Antigravity
+# Simple PowerShell HTTP Server for NFS-e Freire
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:8080/")
 $listener.Start()
-Write-Host "NFS-e Antigravity Server running at http://localhost:8080/"
+Write-Host "NFS-e Freire Server running at http://localhost:8080/"
 Write-Host "Press Ctrl+C to stop."
 
 $mimeTypes = @{

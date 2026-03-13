@@ -2,7 +2,7 @@
 
 **Versão 1.0 — Março de 2026**
 
-Este documento estabelece a arquitetura, o backlog e os requisitos técnicos para a expansão do Ecossistema NFS-e Antigravity. O novo foco transforma o sistema em uma **plataforma para Prefeituras/Municípios**, atuando como repositório de notas emitidas no Emissor Nacional e motor de apuração e cobrança do ISSQN.
+Este documento estabelece a arquitetura, o backlog e os requisitos técnicos para a expansão do Ecossistema NFS-e Freire. O novo foco transforma o sistema em uma **plataforma para Prefeituras/Municípios**, atuando como repositório de notas emitidas no Emissor Nacional e motor de apuração e cobrança do ISSQN.
 
 ---
 
@@ -86,7 +86,7 @@ O Município fornecerá um Portal Web onde o contador de cada empresa acessará 
 | **Phase 3** | **Tratamento de Filas e Eventos** | Processar eventos de XML. Se o Worker baixar um "Cancelamento", ele deve encontrar a NFS-e original pela Chave de Acesso no BD e mudar o status para "Cancelada/Irregular". | 🟡 Alta |
 | **Phase 4** | **Motor de Apuração (M.A.)** | Algoritmo que lê as notas agrupadas do mês, aplica regras de localidade fiscal e calcula os consolidados de Débito (Guias). | 🟡 Alta |
 | **Phase 5** | **Integração Bancária / PIX** | Geração e registro de boleto padrão Febraban ou QR Code Pix dinâmico atrelado à Conta Única do Tesouro Municipal. Retorno bancário automático (Baixa/Arquivo Retorno). | 🟢 Média |
-| **Phase 6** | **Portal do Contribuinte (Frontend)**| Tela onde o cidadão autentica para imprimir sua Guia gerada, visualizar relatórios e declarar aceite de fechamento do mês. (Reaproveitar Antigravity UI). | 🟢 Média |
+| **Phase 6** | **Portal do Contribuinte (Frontend)**| Tela onde o cidadão autentica para imprimir sua Guia gerada, visualizar relatórios e declarar aceite de fechamento do mês. (Reaproveitar Freire UI). | 🟢 Média |
 
 ---
 
@@ -98,4 +98,4 @@ O Município fornecerá um Portal Web onde o contador de cada empresa acessará 
 4. **ISSQN Misto (IBS/CBS):** Considerando o período de transição (2026-2032), o motor terá de segregar o montante municipal do IBS do ISSQN legado para transferir ao Comitê Gestor futuramente.
 
 ---
-*Gerado por Antigravity AI — Março de 2026. Alinhado ao Padrão Técnico do Emissor NFS-e Nacional.*
+*Gerado por Freire AI — Março de 2026. Alinhado ao Padrão Técnico do Emissor NFS-e Nacional.*

@@ -1,5 +1,5 @@
 /**
- * NFSe Antigravity — Data Access Layer (PostgreSQL)
+ * NFSe Freire — Data Access Layer (PostgreSQL)
  * Substitui getDb/saveDb do db.json por queries SQL.
  */
 import pg from 'pg';
@@ -70,6 +70,22 @@ export async function getMaxNsu() {
   return r.rows[0]?.max_nsu_lido ?? 0;
 }
 
+/** Maior NSU presente na tabela notas (para garantir continuidade se sync_state foi resetado) */
+export async function getMaxNsuFromNotas() {
+  const r = await pool.query('SELECT COALESCE(MAX(nsu), 0)::int AS max_nsu FROM notas');
+  return r.rows[0]?.max_nsu ?? 0;
+}
+
+/** Retorna o NSU a partir do qual continuar a importação (maior entre sync_state e notas) */
+export async function getMaxNsuParaContinuar() {
+  const [fromSync, fromNotas] = await Promise.all([getMaxNsu(), getMaxNsuFromNotas()]);
+  const max = Math.max(fromSync, fromNotas);
+  if (fromNotas > fromSync) {
+    await pool.query('UPDATE sync_state SET max_nsu_lido = $1 WHERE id = 1', [max]);
+  }
+  return max;
+}
+
 export async function updateMaxNsu(n) {
   await pool.query('UPDATE sync_state SET max_nsu_lido = $1 WHERE id = 1', [n]);
   return n;
@@ -100,17 +116,17 @@ export async function getUsers(filter = {}) {
 }
 
 export async function insertUser(user) {
-  const { cpf, name, role, userType, passwordHash, authLevel, cnpjVinculado, status } = user;
+  const { cpf, name, email, celular, role, userType, passwordHash, authLevel, cnpjVinculado, status } = user;
   await pool.query(
-    `INSERT INTO users (cpf, name, role, user_type, password_hash, auth_level, cnpj_vinculado, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [cpf, name, role, userType, passwordHash, authLevel || null, cnpjVinculado || '', status || 'Ativo']
+    `INSERT INTO users (cpf, name, email, celular, role, user_type, password_hash, auth_level, cnpj_vinculado, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [cpf, name, email || '', celular || '', role, userType, passwordHash, authLevel || null, cnpjVinculado || '', status || 'Ativo']
   );
   return await getUserByCpf(cpf);
 }
 
 export async function updateUser(cpf, data) {
-  const allowed = ['name', 'role', 'authLevel', 'status'];
+  const allowed = ['name', 'email', 'celular', 'role', 'authLevel', 'status'];
   const updates = [];
   const vals = [];
   let i = 1;
@@ -153,6 +169,16 @@ function notaRowToNota(row) {
     tributos: row.tributos || {},
   };
   return n;
+}
+
+export async function getNotaByChave(chaveAcesso) {
+  const chave = String(chaveAcesso || '').replace(/\D/g, '');
+  if (!chave || chave.length !== 50) return null;
+  const r = await pool.query(
+    'SELECT * FROM notas WHERE regexp_replace(chave_acesso, \'[^0-9]\', \'\', \'g\') = $1 OR chave_acesso = $1',
+    [chave]
+  );
+  return r.rows[0] ? notaRowToNota(r.rows[0]) : null;
 }
 
 export async function getNotas(filters = {}) {
@@ -308,9 +334,13 @@ export async function updateApuracao(id, data) {
 // ─── Migrations ──────────────────────────────────────────────────────────────
 
 export async function runMigrations() {
-  const sqlPath = join(__dirname, 'migrations', '001-init.sql');
-  const sql = await fs.readFile(sqlPath, 'utf-8');
-  await pool.query(sql);
+  const migrationsDir = join(__dirname, 'migrations');
+  const files = await fs.readdir(migrationsDir);
+  const sqlFiles = files.filter(f => f.endsWith('.sql')).sort();
+  for (const f of sqlFiles) {
+    const sql = await fs.readFile(join(migrationsDir, f), 'utf-8');
+    await pool.query(sql);
+  }
 }
 
 // ─── Health check ─────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Toast Notification System
+ * NFS-e Freire — Toast Notification System
  */
 export class Toast {
   constructor() {

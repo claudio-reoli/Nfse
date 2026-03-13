@@ -1,9 +1,11 @@
 /**
- * NFS-e Antigravity — Configurações do Município
+ * NFS-e Freire — Configurações do Município
  * Certificado Digital, dados cadastrais e ambiente de operação
  */
 import { toast } from '../toast.js';
+import { notifyConfigSaved } from '../config-sync.js';
 import { getBackendUrl } from '../api-service.js';
+import { buscarMunicipiosPorUF, formatMunicipioDisplaySync } from '../municipios-ibge.js';
 import {
   loadCertificateA1,
   getCertStore,
@@ -203,12 +205,18 @@ export function renderConfiguracoesMunicipio(container) {
         </div>
         <div class="form-row mb-4">
           <div class="form-group">
-            <label class="form-label">Código IBGE</label>
-            <input class="form-input form-input-mono" id="cfg-mun-ibge" type="text" maxlength="7" placeholder="0000000">
-          </div>
-          <div class="form-group">
             <label class="form-label">UF</label>
             <input class="form-input" id="cfg-mun-uf" type="text" maxlength="2" placeholder="BA" style="text-transform: uppercase;">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label">Município (IBGE)</label>
+            <div class="municipio-select-wrapper">
+              <input type="text" class="form-input municipio-display" id="cfg-mun-ibge-display"
+                placeholder="Selecione UF e busque por nome..." list="cfg-mun-ibge-list" autocomplete="off">
+              <input type="hidden" id="cfg-mun-ibge">
+              <datalist id="cfg-mun-ibge-list"></datalist>
+            </div>
+            <span class="form-help">Exibição: Nome (UF) — IBGE: código — facilita busca pelo nome</span>
           </div>
         </div>
         <div class="form-row mb-4">
@@ -259,6 +267,13 @@ export function renderConfiguracoesMunicipio(container) {
             <input class="form-input form-input-mono" id="cfg-mun-url-adn" type="text" readonly>
           </div>
         </div>
+        <div class="form-row mb-4">
+          <div class="form-group flex-1">
+            <label class="form-label">URL ADN Municípios (override)</label>
+            <input class="form-input form-input-mono" id="cfg-mun-url-adn-mun" type="text" placeholder="Ex: https://adn.nfse.gov.br ou https://adn.nfse.gov.br/dfe (deixe vazio para padrão)">
+            <small class="form-hint">Se 404 persistir, tente: Produção <code>https://adn.nfse.gov.br</code> ou Sandbox <code>https://adn.producaorestrita.nfse.gov.br</code></small>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -280,13 +295,18 @@ export function renderConfiguracoesMunicipio(container) {
     const el = (id) => document.getElementById(id);
     if (cfg.cnpj) el('cfg-mun-cnpj').value = maskCNPJ(cfg.cnpj);
     if (cfg.nome) el('cfg-mun-nome').value = cfg.nome;
-    if (cfg.ibge) el('cfg-mun-ibge').value = cfg.ibge;
+    if (cfg.ibge) {
+      el('cfg-mun-ibge').value = cfg.ibge;
+      const displayEl = el('cfg-mun-ibge-display');
+      if (displayEl) displayEl.value = formatMunicipioDisplaySync(cfg.ibge, cfg.nome, cfg.uf);
+    }
     if (cfg.uf) el('cfg-mun-uf').value = cfg.uf;
     if (cfg.inscEstadual) el('cfg-mun-ie').value = cfg.inscEstadual;
     if (cfg.email) el('cfg-mun-email').value = cfg.email;
     if (cfg.telefone) el('cfg-mun-telefone').value = cfg.telefone;
     if (cfg.endereco) el('cfg-mun-endereco').value = cfg.endereco;
     if (cfg.ambiente) el('cfg-mun-ambiente').value = cfg.ambiente;
+    if (el('cfg-mun-url-adn-mun')) el('cfg-mun-url-adn-mun').value = cfg.urlAdnMun || '';
     updateAmbUrls(cfg.ambiente || 'sandbox');
   }
 
@@ -305,6 +325,37 @@ export function renderConfiguracoesMunicipio(container) {
 
   document.getElementById('cfg-mun-cnpj')?.addEventListener('input', (e) => {
     e.target.value = maskCNPJ(e.target.value);
+  });
+
+  // Município: carrega lista por UF e vincula seleção
+  const ufEl = document.getElementById('cfg-mun-uf');
+  const displayEl = document.getElementById('cfg-mun-ibge-display');
+  const hiddenEl = document.getElementById('cfg-mun-ibge');
+  const datalistEl = document.getElementById('cfg-mun-ibge-list');
+  const nomeEl = document.getElementById('cfg-mun-nome');
+
+  const loadMunOptions = async () => {
+    const uf = ufEl?.value?.trim().toUpperCase();
+    if (!uf || uf.length !== 2 || !datalistEl) return;
+    try {
+      const lista = await buscarMunicipiosPorUF(uf);
+      datalistEl.innerHTML = lista.map(m => `<option value="${m.display}" data-code="${m.id}" data-nome="${(m.nome || '').replace(/"/g, '&quot;')}">`).join('');
+    } catch (_) {}
+  };
+
+  ufEl?.addEventListener('change', loadMunOptions);
+  ufEl?.addEventListener('blur', loadMunOptions);
+
+  displayEl?.addEventListener('change', () => {
+    const opt = Array.from(datalistEl?.querySelectorAll('option') || []).find(o => o.value === displayEl.value);
+    if (opt) {
+      hiddenEl.value = opt.dataset.code || '';
+      if (nomeEl) nomeEl.value = opt.dataset.nome || nomeEl.value;
+    }
+  });
+  displayEl?.addEventListener('input', () => {
+    const opt = Array.from(datalistEl?.querySelectorAll('option') || []).find(o => o.value === displayEl.value);
+    hiddenEl.value = opt ? (opt.dataset.code || '') : displayEl.value.replace(/\D/g, '').slice(0, 7);
   });
 
   // ═══ CERT PANEL RENDER ═══════════════════════
@@ -529,6 +580,7 @@ export function renderConfiguracoesMunicipio(container) {
       telefone: val('cfg-mun-telefone'),
       endereco: val('cfg-mun-endereco'),
       ambiente: val('cfg-mun-ambiente'),
+      urlAdnMun: val('cfg-mun-url-adn-mun'),
     };
 
     if (!payload.ibge) {
@@ -540,6 +592,7 @@ export function renderConfiguracoesMunicipio(container) {
       const result = await saveConfig(payload);
       if (result.sucesso) {
         toast.success('Configurações do município salvas com sucesso!');
+        notifyConfigSaved();
       }
     } catch {
       toast.error('Falha ao salvar configurações.');

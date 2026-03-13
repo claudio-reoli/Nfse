@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Auth & RBAC Service (Production)
+ * NFS-e Freire — Auth & RBAC Service (Production)
  */
 
 export const ROLES = {
@@ -47,10 +47,12 @@ export function logout() {
   window.dispatchEvent(new Event('session_changed'));
 }
 
+/** Aceita role keys (MASTER, CONTADOR) ou labels (Administrador Master, Contador) */
 export function isAuthorized(requiredRoles) {
   const session = getSession();
   if (!session) return false;
-  return requiredRoles.includes(session.role);
+  const role = session.role;
+  return requiredRoles.some(r => r === role || ROLES[r] === role);
 }
 
 export async function promptMFA() {

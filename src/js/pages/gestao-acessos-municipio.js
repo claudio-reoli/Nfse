@@ -1,10 +1,10 @@
 /**
- * NFS-e Antigravity — Gestão de Acessos (Módulo Município)
+ * NFS-e Freire — Gestão de Acessos (Módulo Município)
  */
 import { MUN_ROLES, isMunAuthorized } from '../auth-municipio.js';
 import { toast } from '../toast.js';
-import { maskCPF } from '../fiscal-utils.js';
-import { getBackendUrl } from '../api-service.js';
+import { maskCPF, maskPhone } from '../fiscal-utils.js';
+import { getBackendUrl, getUsers } from '../api-service.js';
 
 const BASE_ROLES = [
   { value: 'GESTOR', label: MUN_ROLES.GESTOR },
@@ -45,6 +45,14 @@ export function renderGestaoAcessosMun(container) {
               ${BASE_ROLES.map(r => `<option value="${r.value}">${r.label}</option>`).join('')}
             </select>
           </div>
+          <div class="form-group">
+            <label class="form-label">E-mail <span class="text-danger">*</span></label>
+            <input type="email" class="form-input" id="mun-novo-email" placeholder="usuario@municipio.gov.br" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Celular <span class="text-danger">*</span></label>
+            <input type="tel" class="form-input form-input-mono" id="mun-novo-celular" placeholder="(00) 00000-0000" maxlength="16" required>
+          </div>
         </div>
         <div style="text-align: right;">
           <button class="btn btn-primary" id="btn-mun-save-user">Salvar Servidor</button>
@@ -68,15 +76,41 @@ export function renderGestaoAcessosMun(container) {
             <tr>
               <th>Servidor</th>
               <th>CPF</th>
+              <th>E-mail</th>
+              <th>Celular</th>
               <th>Papel / Cargo</th>
               <th>Status</th>
               <th>Ações</th>
             </tr>
           </thead>
           <tbody id="mun-tabela-acessos">
-            <tr><td colspan="5" style="text-align:center;">Carregando...</td></tr>
+            <tr><td colspan="7" style="text-align:center;">Carregando...</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <div id="modal-mun-editar-usuario" class="modal-overlay hidden" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;display:none;">
+      <div class="card" style="max-width: 420px; width: 90%;">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 class="card-title">Editar E-mail e Celular</h3>
+          <button id="fechar-modal-mun-editar" class="btn btn-ghost" style="color:var(--color-danger-400);">✕</button>
+        </div>
+        <div class="card-body">
+          <input type="hidden" id="mun-editar-usuario-cpf">
+          <div class="form-group mb-4">
+            <label class="form-label">E-mail <span class="text-danger">*</span></label>
+            <input type="email" class="form-input" id="mun-editar-usuario-email" placeholder="usuario@municipio.gov.br" required>
+          </div>
+          <div class="form-group mb-4">
+            <label class="form-label">Celular <span class="text-danger">*</span></label>
+            <input type="tel" class="form-input form-input-mono" id="mun-editar-usuario-celular" placeholder="(00) 00000-0000" maxlength="16" required>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button id="btn-mun-cancelar-editar" class="btn btn-secondary">Cancelar</button>
+            <button id="btn-mun-salvar-editar" class="btn btn-primary">Salvar</button>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -86,13 +120,21 @@ export function renderGestaoAcessosMun(container) {
   document.getElementById('mun-novo-cpf')?.addEventListener('input', (e) => {
     e.target.value = maskCPF(e.target.value.replace(/\D/g, ''));
   });
+  document.getElementById('mun-novo-celular')?.addEventListener('input', (e) => {
+    e.target.value = maskPhone(e.target.value.replace(/\D/g, ''));
+  });
 
   async function loadUsers() {
+    const tbody = document.getElementById('mun-tabela-acessos');
+    if (!tbody) return;
     try {
-      const resp = await fetch(`${getBackendUrl()}/users?type=municipio`);
-      allUsers = await resp.json();
+      const resp = await getUsers({ type: 'municipio' });
+      const data = resp?.data;
+      allUsers = Array.isArray(data) ? data : [];
       renderTable(allUsers);
     } catch (e) {
+      allUsers = [];
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--color-danger-400);">Erro ao carregar servidores.</td></tr>';
       toast.error('Falha ao listar servidores.');
     }
   }
@@ -100,7 +142,7 @@ export function renderGestaoAcessosMun(container) {
   function renderTable(users) {
     const tbody = document.getElementById('mun-tabela-acessos');
     if (users.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhum servidor encontrado.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Nenhum servidor encontrado.</td></tr>';
       return;
     }
 
@@ -122,6 +164,8 @@ export function renderGestaoAcessosMun(container) {
           </div>
         </td>
         <td class="text-mono">${a.cpf}</td>
+        <td>${a.email || '—'}</td>
+        <td>${a.celular ? maskPhone(a.celular) : '—'}</td>
         <td><span class="badge ${roleBadge(a.role)}">${MUN_ROLES[a.role] || a.role}</span></td>
         <td>
           <span class="badge ${a.status === 'Ativo' ? 'badge-success' : 'badge-warning'}">
@@ -130,6 +174,7 @@ export function renderGestaoAcessosMun(container) {
         </td>
         <td>
           <div class="btn-group">
+            <button class="btn btn-ghost btn-sm btn-mun-editar" data-cpf="${a.cpf}" data-email="${a.email || ''}" data-celular="${a.celular || ''}">Editar</button>
             <button class="btn btn-ghost btn-sm btn-mun-suspend" data-cpf="${a.cpf}" data-status="${a.status || 'Ativo'}" style="color: var(--color-danger-400);">
               ${(a.status || 'Ativo') === 'Ativo' ? 'Suspender' : 'Reativar'}
             </button>
@@ -139,7 +184,26 @@ export function renderGestaoAcessosMun(container) {
     `).join('');
   }
 
+  function abrirModalMunEditar(cpf, email, celular) {
+    document.getElementById('mun-editar-usuario-cpf').value = cpf;
+    document.getElementById('mun-editar-usuario-email').value = email || '';
+    document.getElementById('mun-editar-usuario-celular').value = celular ? maskPhone(celular) : '';
+    const modal = document.getElementById('modal-mun-editar-usuario');
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  }
+  function fecharModalMunEditar() {
+    const modal = document.getElementById('modal-mun-editar-usuario');
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+
   document.getElementById('mun-tabela-acessos')?.addEventListener('click', async (e) => {
+    const btnEditar = e.target.closest('.btn-mun-editar');
+    if (btnEditar) {
+      abrirModalMunEditar(btnEditar.dataset.cpf, btnEditar.dataset.email, btnEditar.dataset.celular);
+      return;
+    }
     const btn = e.target.closest('.btn-mun-suspend');
     if (!btn) return;
     const cpf = btn.dataset.cpf;
@@ -162,10 +226,20 @@ export function renderGestaoAcessosMun(container) {
   document.getElementById('btn-mun-save-user')?.addEventListener('click', async () => {
     const cpf = document.getElementById('mun-novo-cpf').value;
     const name = document.getElementById('mun-novo-nome').value;
+    const email = document.getElementById('mun-novo-email').value?.trim();
+    const celular = document.getElementById('mun-novo-celular').value?.replace(/\D/g, '');
     const role = document.getElementById('mun-novo-role').value;
 
     if (!cpf || cpf.length < 14 || !name) {
       toast.warning('Preencha CPF e Nome.');
+      return;
+    }
+    if (!email) {
+      toast.warning('E-mail é obrigatório.');
+      return;
+    }
+    if (!celular || celular.length < 10) {
+      toast.warning('Celular é obrigatório (mínimo 10 dígitos).');
       return;
     }
 
@@ -173,13 +247,15 @@ export function renderGestaoAcessosMun(container) {
       const resp = await fetch(`${getBackendUrl()}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cpf, name, role, userType: 'municipio', password: '12345678' })
+        body: JSON.stringify({ cpf, name, email, celular, role, userType: 'municipio', password: '12345678' })
       });
       const data = await resp.json();
       if (resp.ok) {
         toast.success('Servidor cadastrado com sucesso.');
         document.getElementById('mun-novo-cpf').value = '';
         document.getElementById('mun-novo-nome').value = '';
+        document.getElementById('mun-novo-email').value = '';
+        document.getElementById('mun-novo-celular').value = '';
         loadUsers();
       } else {
         toast.error(data.error || 'Falha ao cadastrar.');
@@ -187,6 +263,34 @@ export function renderGestaoAcessosMun(container) {
     } catch (e) {
       toast.error('Erro de conexão ao cadastrar servidor.');
     }
+  });
+
+  document.getElementById('fechar-modal-mun-editar')?.addEventListener('click', fecharModalMunEditar);
+  document.getElementById('btn-mun-cancelar-editar')?.addEventListener('click', fecharModalMunEditar);
+  document.getElementById('mun-editar-usuario-celular')?.addEventListener('input', (e) => {
+    e.target.value = maskPhone(e.target.value.replace(/\D/g, ''));
+  });
+  document.getElementById('btn-mun-salvar-editar')?.addEventListener('click', async () => {
+    const cpf = document.getElementById('mun-editar-usuario-cpf').value;
+    const email = document.getElementById('mun-editar-usuario-email').value?.trim();
+    const celular = document.getElementById('mun-editar-usuario-celular').value?.replace(/\D/g, '');
+    if (!email) { toast.warning('E-mail é obrigatório.'); return; }
+    if (!celular || celular.length < 10) { toast.warning('Celular é obrigatório (mínimo 10 dígitos).'); return; }
+    try {
+      const resp = await fetch(`${getBackendUrl()}/users/${encodeURIComponent(cpf)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, celular })
+      });
+      if (resp.ok) {
+        toast.success('E-mail e celular atualizados.');
+        fecharModalMunEditar();
+        loadUsers();
+      } else {
+        const data = await resp.json();
+        toast.error(data.error || 'Falha ao atualizar.');
+      }
+    } catch (e) { toast.error('Falha ao atualizar.'); }
   });
 
   document.getElementById('btn-mun-filtrar')?.addEventListener('click', () => {

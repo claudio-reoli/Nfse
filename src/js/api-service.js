@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — API Service Layer (Production Ready)
+ * NFS-e Freire — API Service Layer (Production Ready)
  * Client para APIs Sefin Nacional, ADN e Backend Próprio
  */
 
@@ -36,7 +36,11 @@ export function isDemoMode() {
   return demoMode;
 }
 
-const BACKEND_ORIGIN = window.location.origin;
+const BACKEND_ORIGIN = (() => {
+  const o = window.location.origin;
+  if (o && o !== 'null' && !o.startsWith('file:')) return o;
+  return 'http://localhost:3099';
+})();
 
 export function getBackendUrl() {
   return `${BACKEND_ORIGIN}/api`;
@@ -44,7 +48,7 @@ export function getBackendUrl() {
 
 function getBaseUrl(api) {
   if (api === 'backend') return `${BACKEND_ORIGIN}/api`;
-  return `${BACKEND_ORIGIN}/api/proxy/${currentEnv}/${api}`;
+  return `${BACKEND_ORIGIN}/api/proxy/${api}`;
 }
 
 // ─── HTTP Client ────────────────────────────────
@@ -61,10 +65,15 @@ async function apiRequest(baseApi, path, options = {}) {
     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
   };
 
+  const timeoutMs = options.timeout ?? 30000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   const config = {
+    ...options,
     method: options.method || 'GET',
     headers: { ...defaultHeaders, ...options.headers },
-    ...options,
+    signal: controller.signal
   };
 
   if (options.body && typeof options.body === 'object' && config.headers['Content-Type'] === 'application/json') {
@@ -73,6 +82,7 @@ async function apiRequest(baseApi, path, options = {}) {
 
   try {
     const response = await fetch(url, config);
+    clearTimeout(timeoutId);
     const data = response.headers.get('content-type')?.includes('json')
       ? await response.json()
       : await response.text();
@@ -82,7 +92,11 @@ async function apiRequest(baseApi, path, options = {}) {
     }
     return { data, status: response.status, ok: true };
   } catch (err) {
+    clearTimeout(timeoutId);
     if (err instanceof ApiError) throw err;
+    if (err.name === 'AbortError') {
+      throw new ApiError('Sistema não respondeu no prazo. Tente novamente.', 0, null);
+    }
     throw new ApiError(`Falha na conexão: ${err.message}`, 0, null);
   }
 }
@@ -116,12 +130,44 @@ export async function getHealthStatus() {
   return apiRequest('backend', '/health');
 }
 
-export async function getUsers() {
-  return apiRequest('backend', '/users');
+export async function getConfigAmbiente() {
+  return apiRequest('backend', '/config/ambiente');
+}
+
+/** Busca ambiente do município com fallback para /municipio/config. Retorna { ambiente, urlSefin, urlAdn } ou null. */
+export async function fetchConfigAmbiente() {
+  const base = getBackendUrl();
+  const tryFetch = async (path) => {
+    const res = await fetch(`${base}${path}?t=${Date.now()}`, { cache: 'no-store', headers: { Accept: 'application/json' } });
+    const ct = res.headers.get('content-type') || '';
+    return res.ok && ct.includes('json') ? await res.json() : null;
+  };
+  let data = await tryFetch('/config/ambiente');
+  if (!data || !(data.ambiente || data.urlSefin || data.urlAdn)) {
+    const full = await tryFetch('/municipio/config');
+    if (full?.ambiente) {
+      const amb = full.ambiente;
+      data = {
+        ambiente: amb,
+        urlSefin: amb === 'production' ? 'sefin.nfse.gov.br' : 'sefin.producaorestrita.nfse.gov.br',
+        urlAdn: amb === 'production' ? 'adn.nfse.gov.br' : 'adn.producaorestrita.nfse.gov.br',
+      };
+    }
+  }
+  return data;
+}
+
+export async function getUsers(filter = {}) {
+  const qs = filter.type ? `?type=${encodeURIComponent(filter.type)}` : '';
+  return apiRequest('backend', `/users${qs}`);
 }
 
 export async function createUser(userData) {
   return apiRequest('backend', '/users', { method: 'POST', body: userData });
+}
+
+export async function updateUser(cpf, data) {
+  return apiRequest('backend', `/users/${encodeURIComponent(cpf)}`, { method: 'PUT', body: data });
 }
 
 export async function deleteUser(cpf) {
@@ -134,6 +180,11 @@ export async function deleteUser(cpf) {
 
 export async function enviarDPS(dpsXml) {
   return apiRequest('sefin', '/nfse', { method: 'POST', contentType: 'application/xml', body: dpsXml });
+}
+
+/** Consulta NFS-e no banco local (evita 403 da Sefin sem certificado) */
+export async function consultarNFSeLocal(chaveAcesso) {
+  return apiRequest('backend', `/nfse/${encodeURIComponent(chaveAcesso.replace(/\D/g, ''))}`);
 }
 
 export async function consultarNFSe(chaveAcesso) {
@@ -202,8 +253,17 @@ function getDemoResponse(fnName, args) {
 // BUSCA CNPJ (Externo)
 // ════════════════════════════════════════════════
 export async function consultarCNPJ(cnpj) {
-  const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj.replace(/\D/g, '')}`);
-  if (!res.ok) throw new Error('Falha na consulta do CNPJ');
-  const data = await res.json();
-  return { razaoSocial: data.razao_social, fantasia: data.nome_fantasia || data.razao_social, logradouro: data.logradouro, numero: data.numero, municipio: data.municipio, uf: data.uf, codigoIbge: data.codigo_municipio };
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj.replace(/\D/g, '')}`, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!res.ok) throw new Error('Falha na consulta do CNPJ');
+    const data = await res.json();
+    return { razaoSocial: data.razao_social, fantasia: data.nome_fantasia || data.razao_social, logradouro: data.logradouro, numero: data.numero, municipio: data.municipio, uf: data.uf, codigoIbge: data.codigo_municipio };
+  } catch (e) {
+    clearTimeout(t);
+    if (e.name === 'AbortError') throw new Error('Consulta CNPJ não respondeu no prazo.');
+    throw e;
+  }
 }

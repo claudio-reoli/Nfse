@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Auth & RBAC Service (Módulo Município)
+ * NFS-e Freire — Auth & RBAC Service (Módulo Município)
  * Gerencia a sessão do usuário e os níveis de permissão da Prefeitura.
  */
 

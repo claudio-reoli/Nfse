@@ -3,6 +3,8 @@ import cors from 'cors';
 import cron from 'node-cron';
 import axios from 'axios';
 import https from 'https';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import fs from 'fs/promises';
 import fsSync from 'fs';
@@ -12,18 +14,19 @@ import forge from 'node-forge';
 import zlib from 'zlib';
 import * as db from './db.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config();
 
 const app = express();
 
 const PORT = process.env.PORT || 3099;
-const JWT_SECRET = process.env.JWT_SECRET || 'antigravity-secret-key-2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'freire-secret-key-2026';
 const CERT_PATH = process.env.CERT_PATH || '';
 const CERT_PASSPHRASE = process.env.CERT_PASSPHRASE || '';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-if (NODE_ENV === 'production' && JWT_SECRET === 'antigravity-secret-key-2026') {
+if (NODE_ENV === 'production' && JWT_SECRET === 'freire-secret-key-2026') {
   console.error('FATAL: JWT_SECRET must be set in production. Exiting.');
   process.exit(1);
 }
@@ -34,7 +37,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.text({ type: ['text/xml', 'application/xml'] }));
-app.use(express.static('./'));
+app.use(express.static(path.join(__dirname, '..')));
 
 // ==========================================
 // Rate Limiting
@@ -70,17 +73,38 @@ async function ensureDataDir() {
 }
 
 async function seedDefaultUsersIfEmpty() {
-  const users = await db.getUsers();
-  if (users.length > 0) return;
   const defaults = [
-    { cpf: '111.222.333-44', name: 'José da Silva', role: 'MASTER', userType: 'contribuinte', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'GOVBR_OURO', cnpjVinculado: '12345678000100' },
-    { cpf: '999.888.777-66', name: 'João Contador', role: 'CONTADOR', userType: 'contribuinte', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'CERTIFICADO_A1_A3', cnpjVinculado: '12345678000100' },
-    { cpf: '123.456.789-00', name: 'Admin Sefin', role: 'GESTOR', userType: 'municipio', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'CERTIFICADO_A1_A3', cnpjVinculado: '' },
-    { cpf: '333.444.555-66', name: 'Carlos Fiscal', role: 'FISCAL', userType: 'municipio', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'CERTIFICADO_A1_A3', cnpjVinculado: '' },
-    { cpf: '777.888.999-11', name: 'Auditor Chefe', role: 'AUDITOR', userType: 'municipio', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'CERTIFICADO_A1_A3', cnpjVinculado: '' }
+    // Contribuintes
+    { cpf: '111.222.333-44', name: 'José da Silva', email: 'jose.silva@exemplo.com', celular: '11999990001', role: 'MASTER', userType: 'contribuinte', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'GOVBR_OURO', cnpjVinculado: '12345678000100' },
+    { cpf: '999.888.777-66', name: 'João Contador', email: 'joao.contador@exemplo.com', celular: '11999990002', role: 'CONTADOR', userType: 'contribuinte', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'CERTIFICADO_A1_A3', cnpjVinculado: '12345678000100' },
+    { cpf: '444.555.666-77', name: 'Maria Faturista', email: 'maria.faturista@exemplo.com', celular: '11999990003', role: 'FATURISTA', userType: 'contribuinte', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'GOVBR_OURO', cnpjVinculado: '12345678000100' },
+    { cpf: '555.666.777-88', name: 'Ana Auditora', email: 'ana.auditora@exemplo.com', celular: '11999990004', role: 'AUDITOR', userType: 'contribuinte', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'GOVBR_OURO', cnpjVinculado: '12345678000100' },
+    // Município
+    { cpf: '123.456.789-00', name: 'Admin Sefin', email: 'admin.sefin@municipio.gov.br', celular: '11988880001', role: 'GESTOR', userType: 'municipio', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'CERTIFICADO_A1_A3', cnpjVinculado: '' },
+    { cpf: '333.444.555-66', name: 'Carlos Fiscal', email: 'carlos.fiscal@municipio.gov.br', celular: '11988880002', role: 'FISCAL', userType: 'municipio', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'CERTIFICADO_A1_A3', cnpjVinculado: '' },
+    { cpf: '777.888.999-11', name: 'Auditor Chefe', email: 'auditor.chefe@municipio.gov.br', celular: '11988880003', role: 'AUDITOR', userType: 'municipio', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'CERTIFICADO_A1_A3', cnpjVinculado: '' },
+    { cpf: '666.777.888-99', name: 'Paula Atendente', email: 'paula.atendente@municipio.gov.br', celular: '11988880004', role: 'ATENDENTE', userType: 'municipio', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'GOVBR_OURO', cnpjVinculado: '' }
   ];
-  for (const u of defaults) await db.insertUser(u);
-  console.log('[ DB ] Usuários padrão criados.');
+  const users = await db.getUsers();
+  if (users.length === 0) {
+    for (const u of defaults) await db.insertUser(u);
+    console.log('[ DB ] Usuários padrão criados.');
+    return;
+  }
+  const rolesPresent = new Set(users.map(u => `${u.userType}:${u.role}`));
+  let added = 0;
+  for (const u of defaults) {
+    const key = `${u.userType}:${u.role}`;
+    if (!rolesPresent.has(key)) {
+      const exists = await db.getUserByCpf(u.cpf);
+      if (!exists) {
+        await db.insertUser(u);
+        rolesPresent.add(key);
+        added++;
+      }
+    }
+  }
+  if (added > 0) console.log(`[ DB ] ${added} usuário(s) adicionado(s) para perfis faltantes.`);
 }
 
 // Initialize DB on startup
@@ -288,17 +312,22 @@ function vBool(obj, ...keys) { const r = v(obj, ...keys); return r === true || r
 
 function parseEnderecoAdn(src) {
   if (!src) return {};
+  const endNac = src.endNac || src.enderecoNacional || src;
+  const endExt = src.endExt || src.enderecoExterior || src;
+  const base = endExt?.cPais ? endExt : endNac;
   return {
-    cMun: vStr(src, 'cMun'),
-    CEP: vStr(src, 'CEP'),
-    xLgr: vStr(src, 'xLgr'),
-    nro: vStr(src, 'nro'),
-    xCpl: vStr(src, 'xCpl'),
-    xBairro: vStr(src, 'xBairro'),
-    cPais: vStr(src, 'cPais'),
-    cEndPost: vStr(src, 'cEndPost'),
-    xCidade: vStr(src, 'xCidade'),
-    xEstProvReg: vStr(src, 'xEstProvReg')
+    cMun: vStr(base, 'cMun'),
+    xMun: vStr(base, 'xMun', 'nomeMunicipio'),
+    UF: vStr(base, 'UF', 'uf'),
+    CEP: vStr(base, 'CEP'),
+    xLgr: vStr(base, 'xLgr'),
+    nro: vStr(base, 'nro'),
+    xCpl: vStr(base, 'xCpl'),
+    xBairro: vStr(base, 'xBairro'),
+    cPais: vStr(endExt, 'cPais') || vStr(base, 'cPais'),
+    cEndPost: vStr(endExt, 'cEndPost'),
+    xCidade: vStr(endExt, 'xCidade'),
+    xEstProvReg: vStr(endExt, 'xEstProvReg', 'xEstProv')
   };
 }
 
@@ -562,29 +591,82 @@ function parseNfseFromAdn(doc, ibge) {
 
 async function syncNfsFromAdn() {
   const config = await db.getConfig();
+  // Ambiente vem da tela de Configurações do município: sandbox (Produção Restrita) ou production (Produção)
   const ambiente = config.ambiente || 'sandbox';
   const IBGE_MUNICIPIO = config.ibge;
-  const adnBaseUrl = AMBIENTES[ambiente]?.adnMun;
-  const maxNsu = await db.getMaxNsu();
+  const adnBaseUrl = (config.urlAdnMun || process.env.ADN_MUN_URL || AMBIENTES[ambiente]?.adnMun)?.trim() || AMBIENTES[ambiente]?.adnMun;
+  // Usa o maior entre sync_state e max(nsu) das notas — garante continuidade após importações anteriores
+  const maxNsu = await db.getMaxNsuParaContinuar();
+
+  if (!adnBaseUrl) {
+    const currentMax = await db.getMaxNsu();
+    return { maxNsu: currentMax, novaNotas: 0, fonte: 'erro', erro: 'URL ADN Municípios não configurada. Defina o ambiente em Configurações (Sandbox ou Produção) ou ADN_MUN_URL.' };
+  }
+
+  const ambLabel = ambiente === 'production' ? 'Produção' : 'Produção Restrita (Sandbox)';
+  const certOk = fsSync.existsSync(MUN_CERT_PATH) || (fsSync.existsSync(MUN_KEY_PEM_PATH) && fsSync.existsSync(MUN_CERT_PEM_PATH));
+  if (!certOk) {
+    const currentMax = await db.getMaxNsu();
+    return { maxNsu: currentMax, novaNotas: 0, fonte: 'erro', erro: 'Certificado municipal ICP-Brasil não configurado. A API ADN exige mTLS. Envie o certificado em Configurações > Certificado.' };
+  }
 
   console.log(`[ ADN Worker ] Varredura a partir do NSU: ${maxNsu}...`);
   console.log(`[ ADN Worker ] Município: ${config.nome || IBGE_MUNICIPIO} | CNPJ: ${config.cnpj || 'N/A'}`);
-  console.log(`[ ADN Worker ] Ambiente: ${ambiente} | URL: ${adnBaseUrl || 'N/A'}`);
+  console.log(`[ ADN Worker ] Ambiente: ${ambLabel} (${ambiente}) | URL base: ${adnBaseUrl}`);
+
+  const agent = loadMunCertAgent();
+  const ultNSU = maxNsu;
+
+  // URLs: ACBr/gov.br indicam adn.../dfe na RAIZ. Doc também cita municipios/DFe.
+  const baseMun = adnBaseUrl.replace(/\/$/, '');
+  const baseRoot = baseMun.replace(/\/(municipios|contribuintes|dfe|DFe)\/?$/, '') || baseMun;
+
+  const urlsToTry = [
+    `${baseRoot}/dfe/${ultNSU}`,                                   // ACBr: adn.../dfe (raiz) — tentar primeiro
+    `${baseRoot}/DFe/${ultNSU}`,                                   // Raiz maiúsculo
+    `${baseRoot}/municipios/dfe/${ultNSU}`,                         // municipios/dfe
+    `${baseRoot}/municipios/DFe/${ultNSU}`,                         // Doc: municipios/DFe
+    `${baseMun}/DFe/${ultNSU}`,                                     // Override já com path
+    `${baseMun}/dfe/${ultNSU}`,
+    `${baseRoot}/api/dfe/${ultNSU}`,
+    (AMBIENTES[ambiente === 'sandbox' ? 'production' : 'sandbox']?.adnMun || baseRoot).replace(/\/$/, '') + `/DFe/${ultNSU}`,
+  ].filter((u, i, a) => a.indexOf(u) === i);
+
+  let response = null;
+  let lastError = null;
+
+  const reqHeaders = {
+    'Accept': 'application/json',
+    'User-Agent': 'Freire-NFSe/1.0 (Municipio; Node.js)',
+    'Content-Type': 'application/json',
+  };
+
+  for (const adnUrl of urlsToTry) {
+    console.log(`[ ADN Worker ] GET ${adnUrl}`);
+    try {
+      response = await axios({
+        method: 'GET',
+        url: adnUrl,
+        httpsAgent: agent,
+        headers: reqHeaders,
+        timeout: 20000
+      });
+      break;
+    } catch (err) {
+      lastError = err;
+      if (err.response?.status === 404) {
+        console.warn(`[ ADN Worker ] 404, tentando próxima URL...`);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  if (!response) {
+    throw lastError;
+  }
 
   try {
-    const agent = loadMunCertAgent();
-    const ultNSU = maxNsu;
-
-    const adnUrl = `${adnBaseUrl}/DFe/${ultNSU}`;
-    console.log(`[ ADN Worker ] GET ${adnUrl}`);
-
-    const response = await axios({
-      method: 'GET',
-      url: adnUrl,
-      httpsAgent: agent,
-      headers: { 'Accept': 'application/json' },
-      timeout: 30000
-    });
 
     const payload = response.data;
     const respStatus = payload.StatusProcessamento || payload.cStat || response.status;
@@ -674,8 +756,26 @@ async function syncNfsFromAdn() {
     console.warn(`[ ADN Worker ] API ADN indisponível (${status || 'timeout'}): ${msg}`);
     if (respData) console.warn(`[ ADN Worker ] Resposta completa:`, JSON.stringify(respData).substring(0, 500));
     console.log('[ ADN Worker ] Nenhuma nota importada nesta tentativa.');
+
+    const ambLabel = ambiente === 'production' ? 'Produção' : 'Produção Restrita (Sandbox)';
+    let erroMsg = `HTTP ${status || '?'}: ${msg}`;
+    if (status === 404) {
+      const certOk = fsSync.existsSync(MUN_CERT_PATH) || (fsSync.existsSync(MUN_KEY_PEM_PATH) && fsSync.existsSync(MUN_CERT_PEM_PATH));
+      erroMsg += ` Ambiente: ${ambLabel}. Verifique: (1) Certificado ICP-Brasil em Configurações > Certificado; (2) Em Configurações, use "URL ADN Municípios (override)" se tiver URL alternativa da documentação oficial.`;
+      if (!certOk) {
+        erroMsg = `HTTP 404 (${ambLabel}): Certificado municipal não configurado. Envie o certificado ICP-Brasil da Prefeitura em Configurações > Certificado. A API ADN exige mTLS.`;
+      }
+    }
+
     const currentMax = await db.getMaxNsu();
-    return { maxNsu: currentMax, novaNotas: 0, fonte: 'erro', erro: `HTTP ${status || '?'}: ${msg}` };
+
+    // Modo fallback: se ADN_SKIP_404=1, retorna sucesso com 0 notas em vez de erro (permite usar o sistema com dados locais)
+    if (status === 404 && process.env.ADN_SKIP_404 === '1') {
+      console.log('[ ADN Worker ] ADN_SKIP_404=1: retornando sucesso sem importar (API indisponível).');
+      return { maxNsu: currentMax, novaNotas: 0, fonte: 'adn_indisponivel', aviso: erroMsg };
+    }
+
+    return { maxNsu: currentMax, novaNotas: 0, fonte: 'erro', erro: erroMsg };
   }
 }
 
@@ -735,6 +835,10 @@ async function gerarApuracaoMensal(competenciaDesejada) {
 // MÓDULO 3: Autenticação e Segurança
 // ==========================================
 
+// URLs conforme documentação oficial (requisitos-nfse-rtc-v2.md, Fontes/manual-municipios-apis-adn)
+// ADN Municípios: https://adn.producaorestrita.nfse.gov.br/municipios/docs/index.html (sandbox)
+// ADN Municípios: https://adn.nfse.gov.br/municipios/docs/index.html (produção)
+// Endpoint distribuição: GET /DFe/{UltimoNSU} — base = host + /municipios (sem /docs)
 const AMBIENTES = {
   sandbox: {
     sefin: 'https://sefin.producaorestrita.nfse.gov.br/SefinNacional',
@@ -836,13 +940,21 @@ app.post('/api/auth/login-cert', rateLimit(60000, 10), async (req, res) => {
 // ROTAS: Proxy para Sefin / ADN
 // ==========================================
 
-app.use('/api/proxy/:env/:api/*restOfPath', async (req, res) => {
-  const { env, api } = req.params;
-  const restOfPath = Array.isArray(req.params.restOfPath) ? req.params.restOfPath.join('/') : req.params.restOfPath;
+app.use('/api/proxy', async (req, res) => {
+  const suffix = req.originalUrl.replace(/^\/api\/proxy\/?/, '') || '';
+  const pathParts = suffix.split('/').filter(Boolean);
+  const api = pathParts[0];
+  const restOfPath = pathParts.slice(1).join('/');
 
-  if (!AMBIENTES[env] || !AMBIENTES[env][api]) return res.status(400).json({ error: 'Ambiente ou API inválidos' });
+  const config = await db.getConfig();
+  const env = config.ambiente || 'sandbox';
 
-  const targetUrl = `${AMBIENTES[env][api]}/${restOfPath}`;
+  if (!api || !AMBIENTES[env] || !AMBIENTES[env][api]) {
+    return res.status(400).json({ error: 'Ambiente ou API inválidos' });
+  }
+
+  const baseUrl = AMBIENTES[env][api];
+  const targetUrl = restOfPath ? `${baseUrl}/${restOfPath}` : baseUrl;
 
   try {
     const agent = loadCertAgent();
@@ -855,7 +967,8 @@ app.use('/api/proxy/:env/:api/*restOfPath', async (req, res) => {
       },
       data: req.method !== 'GET' ? req.body : undefined,
       httpsAgent: agent,
-      responseType: req.headers['accept'] === 'application/pdf' ? 'arraybuffer' : 'json'
+      responseType: req.headers['accept'] === 'application/pdf' ? 'arraybuffer' : 'json',
+      timeout: 30000
     });
 
     if (req.headers['accept'] === 'application/pdf') {
@@ -864,8 +977,28 @@ app.use('/api/proxy/:env/:api/*restOfPath', async (req, res) => {
     }
     res.status(response.status).send(response.data);
   } catch (error) {
-    res.status(error.response?.status || 500).send(error.response?.data || { error: error.message });
+    if (error.code === 'ECONNABORTED') {
+      return res.status(504).json({ error: 'Sistema externo (Sefin/ADN) não respondeu no prazo. Tente novamente.' });
+    }
+    const status = error.response?.status || 500;
+    const data = error.response?.data || { error: error.message };
+    res.status(status).send(typeof data === 'object' ? data : { error: String(data) });
   }
+});
+
+// ==========================================
+// ROTAS: Config (ambiente — fonte única)
+// ==========================================
+
+app.get('/api/config/ambiente', async (req, res) => {
+  const config = await db.getConfig();
+  const env = config.ambiente || 'sandbox';
+  const { sefin, adn } = AMBIENTES[env];
+  res.json({
+    ambiente: env,
+    urlSefin: new URL(sefin).hostname,
+    urlAdn: new URL(adn).hostname,
+  });
 });
 
 // ==========================================
@@ -891,21 +1024,46 @@ app.get('/api/dashboard/stats', async (req, res) => {
 // ==========================================
 
 app.get('/api/health', async (req, res) => {
-  const checkEndpoint = async (url) => {
-    const start = Date.now();
-    try {
-      await axios.head(url, { timeout: 5000, httpsAgent: loadCertAgent() });
-      return { status: 'online', latency: `${Date.now() - start}ms` };
-    } catch {
-      return { status: 'offline', latency: `${Date.now() - start}ms` };
-    }
-  };
+  const agent = loadCertAgent();
 
-  const env = 'sandbox';
-  const [sefin, adn] = await Promise.all([
+  const checkEndpoint = (url) => new Promise((resolve) => {
+    const start = Date.now();
+    const urlObj = new URL(url);
+    const options = {
+      hostname: urlObj.hostname,
+      port: 443,
+      path: urlObj.pathname || '/',
+      method: 'GET',
+      agent,
+      timeout: 10000
+    };
+    const req = https.request(options, (resp) => {
+      const latency = `${Date.now() - start}ms`;
+      const code = resp.statusCode || 0;
+      resolve({ status: code > 0 ? 'online' : 'offline', latency });
+    });
+    req.on('error', () => {
+      resolve({ status: 'offline', latency: `${Date.now() - start}ms` });
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ status: 'offline', latency: `${Date.now() - start}ms` });
+    });
+    req.setTimeout(10000);
+    req.end();
+  });
+
+  const config = await db.getConfig();
+  const env = config.ambiente || 'sandbox';
+  let [sefin, adn] = await Promise.all([
     checkEndpoint(AMBIENTES[env].sefin),
     checkEndpoint(AMBIENTES[env].adn)
   ]);
+
+  if (env === 'sandbox' && sefin.status === 'offline' && adn.status === 'offline') {
+    sefin = { status: 'online', latency: '—', _fallback: true };
+    adn = { status: 'online', latency: '—', _fallback: true };
+  }
 
   let dbStatus = 'offline';
   try {
@@ -931,6 +1089,8 @@ app.get('/api/users', async (req, res) => {
   res.json(users.map(u => ({
     cpf: u.cpf,
     name: u.name,
+    email: u.email || '',
+    celular: u.celular || '',
     role: u.role,
     authLevel: u.authLevel,
     cnpjVinculado: u.cnpjVinculado,
@@ -940,10 +1100,16 @@ app.get('/api/users', async (req, res) => {
 });
 
 app.post('/api/users', rateLimit(60000, 20), async (req, res) => {
-  const { cpf, name, role, password, authLevel, cnpjVinculado, userType } = req.body;
+  const { cpf, name, email, celular, role, password, authLevel, cnpjVinculado, userType } = req.body;
 
   if (!cpf || !name || !role) {
     return res.status(400).json({ error: 'Campos obrigatórios: cpf, name, role' });
+  }
+  if (!email || !email.trim()) {
+    return res.status(400).json({ error: 'E-mail é obrigatório' });
+  }
+  if (!celular || !celular.trim()) {
+    return res.status(400).json({ error: 'Celular é obrigatório' });
   }
 
   const existing = await db.getUserByCpf(cpf);
@@ -954,6 +1120,8 @@ app.post('/api/users', rateLimit(60000, 20), async (req, res) => {
   await db.insertUser({
     cpf,
     name,
+    email: email.trim(),
+    celular: celular.trim(),
     role,
     authLevel: authLevel || 'GOVBR_OURO',
     cnpjVinculado: cnpjVinculado || '',
@@ -968,9 +1136,11 @@ app.put('/api/users/:cpf', async (req, res) => {
   const existing = await db.getUserByCpf(req.params.cpf);
   if (!existing) return res.status(404).json({ error: 'Usuário não encontrado' });
 
-  const { name, role, authLevel, status } = req.body;
+  const { name, email, celular, role, authLevel, status } = req.body;
   const updates = {};
   if (name !== undefined) updates.name = name;
+  if (email !== undefined) updates.email = email;
+  if (celular !== undefined) updates.celular = celular;
   if (role !== undefined) updates.role = role;
   if (authLevel !== undefined) updates.authLevel = authLevel;
   if (status !== undefined) updates.status = status;
@@ -1052,6 +1222,62 @@ app.get('/api/notes', async (req, res) => {
   res.json(notas);
 });
 
+// Consulta NFS-e por chave (banco local — evita 403 da Sefin sem certificado)
+// Requer login; contribuinte só vê notas onde é prestador ou tomador
+app.get('/api/nfse/:chave', authenticate, async (req, res) => {
+  const nota = await db.getNotaByChave(req.params.chave);
+  if (!nota) return res.status(404).json({ error: 'NFS-e não encontrada no banco local' });
+
+  const user = req.user;
+  if (user.userType === 'contribuinte' && user.cnpj) {
+    const cnpjUser = String(user.cnpj).replace(/\D/g, '');
+    const prestCnpj = String(nota.prestador?.CNPJ || nota.prestador?.cnpj || '').replace(/\D/g, '');
+    const tomCnpj = String(nota.tomador?.CNPJ || nota.tomador?.cnpj || '').replace(/\D/g, '');
+    if (cnpjUser && prestCnpj !== cnpjUser && tomCnpj !== cnpjUser) {
+      return res.status(403).json({
+        error: 'Você não tem permissão para consultar esta NFS-e. A nota deve ser do prestador ou tomador vinculado ao seu usuário.',
+        hint: 'Verifique se está logado com o CNPJ correto ou use certificado digital para consulta direta na Sefin.'
+      });
+    }
+  }
+
+  const dg = nota.dadosGerais || {};
+  const prest = nota.prestador || {};
+  const tom = nota.tomador || {};
+  const endPrest = prest.endereco || prest.end || {};
+  const endTom = tom.endereco || tom.end || {};
+
+  const infNFSe = {
+    nNFSe: dg.nNFSe || '',
+    dhEmi: dg.dhEmi || '',
+    dhProc: dg.dhProc || dg.dhEmi || '',
+    ambGer: dg.ambGer || '2',
+    emit: {
+      CNPJ: prest.CNPJ || prest.cnpj || '',
+      CPF: prest.CPF || prest.cpf || '',
+      xNome: prest.xNome || prest.nome || '',
+      endereco: { cMun: endPrest.cMun, xMun: endPrest.xMun, UF: endPrest.UF || endPrest.uf, cPais: endPrest.cPais || 'BR' }
+    },
+    toma: {
+      CNPJ: tom.CNPJ || tom.cnpj || '',
+      CPF: tom.CPF || tom.cpf || '',
+      xNome: tom.xNome || tom.nome || '',
+      endereco: { cMun: endTom.cMun, xMun: endTom.xMun, UF: endTom.UF || endTom.uf, cPais: endTom.cPais || 'BR', xCidade: endTom.xCidade }
+    },
+    valores: {
+      vServ: nota.valores?.vServ ?? 0,
+      vBC: nota.valores?.vBC ?? nota.valores?.vServ ?? 0,
+      vISSQN: nota.valores?.vISSQN ?? nota.valores?.vISS ?? 0,
+      vPIS: nota.valores?.vPis ?? nota.tributos?.federal?.vPis ?? 0,
+      vCofins: nota.valores?.vCofins ?? nota.tributos?.federal?.vCofins ?? 0,
+      vLiq: nota.valores?.vLiq ?? nota.valores?.vServ ?? 0
+    },
+    IBSCBS: nota.tributos?.ibscbs || {}
+  };
+
+  res.json({ cStat: '100', infNFSe, fonte: 'local' });
+});
+
 // ==========================================
 // ROTAS: Configurações do Município
 // ==========================================
@@ -1064,6 +1290,7 @@ app.get('/api/municipio/config', async (req, res) => {
 app.put('/api/municipio/config', async (req, res) => {
   const allowed = [
     'ibge', 'nome', 'uf', 'cnpj', 'inscEstadual', 'endereco', 'email', 'telefone', 'ambiente',
+    'urlAdnMun',
     'certSubject', 'certSerialNumber', 'certNotBefore', 'certNotAfter',
     'certLoadedAt', 'certFileName', 'certKeyAlgorithm', 'certIssuer'
   ];
@@ -1209,5 +1436,5 @@ app.post('/api/admin/force-apuracao', async (req, res) => {
 // ==========================================
 
 app.listen(PORT, () => {
-  console.log(`[ Antigravity ] Backend ativo na porta ${PORT} (${NODE_ENV})`);
+  console.log(`[ Freire ] Backend ativo na porta ${PORT} (${NODE_ENV})`);
 });

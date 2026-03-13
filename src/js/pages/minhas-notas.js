@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Minhas Notas (Histórico Local - Production Ready)
+ * NFS-e Freire — Minhas Notas (Histórico Local - Production Ready)
  */
 import { getSession } from '../auth.js';
 import { toast } from '../toast.js';
@@ -12,7 +12,7 @@ export async function renderMinhasNotas(container) {
     <div class="page-header animate-slide-up">
       <div>
         <h1 class="page-title">Minhas Notas (Histórico Local)</h1>
-        <p class="page-description">Consulta persistente de notas emitidas pelo sistema Antigravity.</p>
+        <p class="page-description">Consulta persistente de notas emitidas pelo sistema Freire.</p>
       </div>
     </div>
 

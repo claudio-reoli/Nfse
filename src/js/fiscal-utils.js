@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Fiscal Utilities
+ * NFS-e Freire — Fiscal Utilities
  * Módulo de cálculos fiscais IBS/CBS/ISSQN e geração de IDs
  * Ref: requisitos-nfse-rtc-v2.md seções 3.4 e 5
  */

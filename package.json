@@ -1,6 +1,6 @@
 {
-  "name": "nfse-antigravity",
-  "version": "1.1.0",
+  "name": "nfse-freire",
+  "version": "1.1.1",
   "description": "Sistema Web NFS-e Padrão Nacional — Emissão, Consulta e Gestão",
   "main": "src/backend-municipio.js",
   "type": "module",

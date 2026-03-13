@@ -1,13 +1,19 @@
 /**
- * NFS-e Antigravity — Consulta de Notas Importadas (Módulo Município)
+ * NFS-e Freire — Consulta de Notas Importadas (Módulo Município)
  */
 import { getBackendUrl } from '../api-service.js';
 import { toast } from '../toast.js';
+import { formatMunicipioDisplaySync, formatEnderecoMunicipio, formatEstrangeiroDisplay } from '../municipios-ibge.js';
 
 const fmtCNPJ = (v) => { if (!v || v.length < 14) return v || '—'; return v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5"); };
 const fmtCPF = (v) => { if (!v || v.length < 11) return v || ''; return v.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4"); };
 const fmtBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-const fmtPct = (v) => v ? `${(v * 100).toFixed(2)}%` : '—';
+const fmtPct = (v) => {
+  if (v == null || v === '') return '—';
+  const num = Number(v);
+  const pct = num <= 1 && num > 0 ? num * 100 : num;
+  return `${pct.toFixed(2)}%`;
+};
 const fmtDoc = (p) => p?.CNPJ ? fmtCNPJ(p.CNPJ) : p?.CPF ? fmtCPF(p.CPF) : '—';
 const fmtData = (v) => { if (!v) return '—'; try { return new Date(v).toLocaleString('pt-BR'); } catch { return v; } };
 const fmtDataCurta = (v) => { if (!v) return '—'; try { return new Date(v).toLocaleDateString('pt-BR'); } catch { return v; } };
@@ -20,21 +26,28 @@ const OP_SIMP_MAP = { '1': 'Não Optante', '2': 'MEI', '3': 'ME/EPP' };
 const REG_ESP_MAP = { '0': 'Nenhum', '1': 'Ato Cooperado', '2': 'Estimativa', '3': 'ME Municipal', '4': 'Notário', '5': 'Autônomo', '6': 'Soc. Profissionais', '9': 'Outros' };
 const MD_PREST_MAP = { '0': 'Desconhecido', '1': 'Transfronteiriço', '2': 'Consumo no Brasil', '3': 'Presença Comercial Ext.', '4': 'Mov. Temp. PF' };
 
-function buildEnderecoHtml(end) {
+function buildEnderecoHtml(end, xLocEmissor) {
   if (!end) return '';
+  const cPais = end.cPais || end.cPaisPrestacao;
+  if (cPais && String(cPais).toUpperCase() !== 'BR') {
+    const ext = formatEstrangeiroDisplay(cPais, end.xCidade, end.xEstProvReg || end.xEstProv);
+    if (ext) return ext;
+  }
   const parts = [];
   if (end.xLgr) parts.push(`${end.xLgr}${end.nro ? ', ' + end.nro : ''}`);
   if (end.xCpl) parts.push(end.xCpl);
   if (end.xBairro) parts.push(end.xBairro);
   if (end.CEP) parts.push(`CEP ${end.CEP}`);
-  if (end.cMun) parts.push(`IBGE ${end.cMun}`);
+  const munDisplay = formatEnderecoMunicipio(end, xLocEmissor) || (end.cMun ? formatMunicipioDisplaySync(end.cMun, end.xMun, end.UF || end.uf) : '');
+  if (munDisplay) parts.push(munDisplay);
   return parts.join(' — ') || '';
 }
 
 function buildPessoaCard(title, p) {
-  if (!p || (!p.CNPJ && !p.CPF && !p.xNome)) return '';
-  const doc = p.CNPJ ? `CNPJ: ${fmtCNPJ(p.CNPJ)}` : p.CPF ? `CPF: ${fmtCPF(p.CPF)}` : '';
-  const nif = p.NIF ? `<div>NIF: ${p.NIF}</div>` : '';
+  if (!p || (!p.CNPJ && !p.CPF && !p.NIF && !p.xNome)) return '';
+  const isEstrangeiro = !!(p.NIF && !p.CNPJ && !p.CPF);
+  const doc = p.CNPJ ? `CNPJ: ${fmtCNPJ(p.CNPJ)}` : p.CPF ? `CPF: ${fmtCPF(p.CPF)}` : p.NIF ? `NIF: ${p.NIF}${isEstrangeiro ? ' <span class="badge badge-warning" style="font-size:0.65rem;">Estrangeiro</span>' : ''}` : '';
+  const nif = (p.NIF && (p.CNPJ || p.CPF)) ? `<div>NIF: ${p.NIF}</div>` : '';
   const im = p.IM ? `<div>IM: ${p.IM}</div>` : '';
   const caepf = p.CAEPF ? `<div>CAEPF: ${p.CAEPF}</div>` : '';
   const contato = [p.fone ? `Tel: ${p.fone}` : '', p.email || ''].filter(Boolean).join(' | ');
@@ -82,7 +95,7 @@ export function renderConsultaNotasMun(container) {
       </div>
       
       <div class="table-container">
-        <table class="data-table" id="tabela-notas">
+        <table class="data-table data-table--notas-adn" id="tabela-notas">
           <thead>
             <tr>
               <th>NSU / Competência</th>
@@ -104,9 +117,12 @@ export function renderConsultaNotasMun(container) {
     </div>
 
     <div id="modal-detalhes" class="modal-overlay hidden" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;display:none;">
-      <div class="card" style="width:100%;max-width:850px;max-height:92vh;overflow-y:auto;position:relative;">
+      <div class="card" style="width:100%;max-width:900px;max-height:92vh;overflow-y:auto;position:relative;">
         <button id="fechar-modal-det" class="btn btn-ghost" style="position:absolute;right:10px;top:10px;font-weight:bold;color:var(--color-danger-400);z-index:10;">✕</button>
-        <div class="card-header"><h3 class="card-title">Detalhes Completos da NFS-e (Padrão Nacional ADN)</h3></div>
+        <div class="card-header">
+          <h3 class="card-title">Dados completos da NFS-e</h3>
+          <p style="font-size:0.8rem;color:var(--color-neutral-400);margin-top:4px;">Agrupados por: Dados Gerais, Partes, Serviço, Valores, Tributos e demais blocos de negócio</p>
+        </div>
         <div class="card-body" id="detalhes-conteudo" style="padding:20px;"></div>
       </div>
     </div>
@@ -127,10 +143,7 @@ export function renderConsultaNotasMun(container) {
     const r = n.tributos?.issqn?.tpRetISSQN;
     return r ? (RET_ISSQN_MAP[r] || r) : (n.issRetidoFonte ? 'Retido' : '');
   };
-  const getServDesc = (n) => {
-    const d = n.servico?.xDescServ || '';
-    return d.length > 40 ? d.substring(0, 40) + '…' : d;
-  };
+  const getServDesc = (n) => n.servico?.xDescServ || '—';
 
   function renderNotasTable(notas) {
     const tbody = document.getElementById('tabela-notas').querySelector('tbody');
@@ -159,9 +172,7 @@ export function renderConsultaNotasMun(container) {
           <div style="font-weight:500;">NSU ${n.nsu}</div>
           <div style="font-size:0.8rem;color:var(--color-neutral-400);">${getCompet(n)}</div>
         </td>
-        <td class="text-mono" style="font-size:0.82rem;" title="${chave}">
-          ${chave.length > 19 ? chave.substring(0, 15) + '…' + chave.slice(-4) : chave}
-        </td>
+        <td class="text-mono" title="${chave}">${chave || '—'}</td>
         <td>
           <div style="font-weight:500;">${prestNome}</div>
           <div class="text-mono" style="font-size:0.78rem;color:var(--color-neutral-400);">${fmtCNPJ(prestDoc)}</div>
@@ -170,7 +181,7 @@ export function renderConsultaNotasMun(container) {
           <div style="font-weight:500;">${tomaNome}</div>
           <div class="text-mono" style="font-size:0.78rem;color:var(--color-neutral-400);">${fmtCNPJ(tomaDoc)}</div>
         </td>
-        <td style="font-size:0.82rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${n.servico?.xDescServ || ''}">${getServDesc(n) || '—'}</td>
+        <td style="font-size:0.82rem;">${getServDesc(n)}</td>
         <td style="font-weight:600;color:var(--color-primary-400);">${fmtBRL(getValor(n))}</td>
         <td style="font-size:0.82rem;">
           <div>${aliq ? fmtPct(aliq) : '—'}</div>
@@ -178,7 +189,9 @@ export function renderConsultaNotasMun(container) {
         </td>
         <td style="text-align:center;">${fonteBadge}</td>
         <td>
-          <button class="btn btn-ghost btn-sm btn-detalhes" data-chave="${chave}">Detalhes</button>
+          <button class="btn btn-primary btn-sm btn-detalhes" data-chave="${chave}" title="Exibir todos os dados da nota agrupados por negócio">
+            <i class="fas fa-file-invoice"></i> Ver dados completos
+          </button>
         </td>
       `;
       tbody.appendChild(tr);
@@ -237,7 +250,7 @@ export function renderConsultaNotasMun(container) {
     html += buildRow('Série / Nº DPS', `${safe(g.serie)} / ${safe(g.nDPS)}`);
     html += buildRow('Data Emissão', fmtData(g.dhEmi));
     html += buildRow('Competência', safe(g.dCompet));
-    html += buildRow('Município Emissor', safe(g.cLocEmi));
+    html += buildRow('Município Emissor', formatMunicipioDisplaySync(g.cLocEmi, g.xLocEmi, g.uf) || safe(g.cLocEmi));
     html += buildRow('Emitente', TP_EMIT_MAP[g.tpEmit] || safe(g.tpEmit));
     html += buildRow('Finalidade', g.finNFSe === '0' ? 'Regular' : safe(g.finNFSe));
     html += buildRow('Versão Aplicação', safe(g.verAplic));
@@ -260,7 +273,9 @@ export function renderConsultaNotasMun(container) {
     html += buildRow('Cód. Trib. Nacional', safe(s.cTribNac));
     html += buildRow('Cód. Trib. Municipal', safe(s.cTribMun));
     html += buildRow('Cód. NBS', safe(s.cNBS));
-    html += buildRow('Local Prestação', safe(s.cLocPrestacao));
+    html += buildRow('Local Prestação', (s.cPaisPrestacao && String(s.cPaisPrestacao).toUpperCase() !== 'BR')
+      ? (formatEstrangeiroDisplay(s.cPaisPrestacao) || `Exterior — País: ${s.cPaisPrestacao}`)
+      : formatMunicipioDisplaySync(s.cLocPrestacao, s.xLocPrestacao, s.uf) || safe(s.cLocPrestacao));
     html += buildRow('País Prestação', safe(s.cPaisPrestacao));
     html += buildRow('Modo Prestação', MD_PREST_MAP[s.mdPrestacao] || safe(s.mdPrestacao));
     html += buildRow('Vínculo', safe(s.vincPrest));
@@ -412,11 +427,15 @@ export function renderConsultaNotasMun(container) {
     if (g.docRef) html += `<div style="font-size:0.82rem;">Doc. Referência: <strong>${g.docRef}</strong></div>`;
 
     document.getElementById('detalhes-conteudo').innerHTML = html;
-    document.getElementById('modal-detalhes').style.display = 'flex';
+    const modal = document.getElementById('modal-detalhes');
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
   }
 
   document.getElementById('fechar-modal-det').addEventListener('click', () => {
-    document.getElementById('modal-detalhes').style.display = 'none';
+    const modal = document.getElementById('modal-detalhes');
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
   });
 
   loadNotas();

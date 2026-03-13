@@ -91,7 +91,10 @@ export function renderDashboardMunicipio(container) {
       munConfig = await res.json();
       const titulo = document.getElementById('dash-mun-titulo');
       if (titulo && munConfig.nome) {
-        titulo.textContent = `Painel de Apuração ISSQN (${munConfig.nome} - ${munConfig.ibge})`;
+        const munDisplay = munConfig.nome && munConfig.uf
+  ? `${munConfig.nome} (${munConfig.uf}) — IBGE: ${munConfig.ibge || ''}`
+  : munConfig.ibge ? `Código IBGE: ${munConfig.ibge}` : munConfig.nome || 'Município';
+titulo.textContent = `Painel de Apuração ISSQN (${munDisplay})`;
       }
       const certAlert = document.getElementById('cert-alert-mun');
       if (!munConfig.certSubject && certAlert) {
@@ -114,12 +117,15 @@ export function renderDashboardMunicipio(container) {
               const totalNotas = notasData.notas?.length || 0;
               document.getElementById('statQtdNotas').textContent = totalNotas;
 
-              const fonteLabel = data.fonte === 'ADN' ? 'API ADN Real' : data.fonte === 'erro' ? 'Falha na API' : 'Base local';
+              const fonteLabel = data.fonte === 'ADN' ? 'API ADN Real' : data.fonte === 'adn_indisponivel' ? 'ADN indisponível' : data.fonte === 'erro' ? 'Falha na API' : 'Base local';
               const novasLabel = data.novaNotas !== undefined ? `${data.novaNotas} novas` : '';
 
               if (data.fonte === 'erro') {
                 showAlert(`API ADN indisponível: ${data.erro || 'sem resposta'}. Nenhuma nota importada.`);
                 toast.warning(`ADN não respondeu. ${totalNotas} notas na base local.`);
+              } else if (data.fonte === 'adn_indisponivel') {
+                showAlert(`API ADN indisponível (modo local). ${totalNotas} notas na base. ${data.aviso || ''}`);
+                toast.info(`Usando base local (${totalNotas} notas). Configure certificado e tente novamente.`);
               } else {
                 showAlert(`Fonte: ${fonteLabel} | NSU: ${data.maxNsu} | ${novasLabel} | ${totalNotas} total na base.`);
                 toast.success(`${novasLabel || 'Sincronização concluída'} via ${fonteLabel}. ${totalNotas} na base local.`);

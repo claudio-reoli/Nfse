@@ -1,12 +1,13 @@
 /**
- * NFS-e Antigravity — SPA Router
+ * NFS-e Freire — SPA Router
  * Lightweight hash-based router for page navigation
  */
 export class Router {
-  constructor(contentEl) {
+  constructor(contentEl, options = {}) {
     this.routes = {};
     this.contentEl = contentEl;
     this.currentRoute = null;
+    this.onRouteChange = options.onRouteChange || (() => {});
     window.addEventListener('hashchange', () => this.resolve());
   }
 
@@ -20,24 +21,26 @@ export class Router {
   }
 
   resolve() {
-    const hash = window.location.hash.slice(1) || '/dashboard';
-    const handler = this.routes[hash];
+    let path = (window.location.hash || '').slice(1).trim() || '/dashboard';
+    if (path && !path.startsWith('/')) path = '/' + path;
+    const handler = this.routes[path];
 
     if (handler) {
-      this.currentRoute = hash;
+      this.currentRoute = path;
       this.contentEl.innerHTML = '';
       this.contentEl.classList.add('animate-fade-in');
       handler(this.contentEl);
+      this.onRouteChange(path);
 
       // Update sidebar navigation
       document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.toggle('active', item.dataset.route === hash);
+        item.classList.toggle('active', item.dataset.route === path);
       });
 
       // Update breadcrumb
       const breadcrumb = document.querySelector('.header-breadcrumb span');
       if (breadcrumb) {
-        breadcrumb.textContent = this.getPageTitle(hash);
+        breadcrumb.textContent = this.getPageTitle(path);
       }
 
       requestAnimationFrame(() => {
@@ -46,7 +49,7 @@ export class Router {
     }
   }
 
-  getPageTitle(hash) {
+  getPageTitle(path) {
     const titles = {
       '/dashboard': 'Dashboard',
       '/emissao-dps': 'Emissão de DPS',
@@ -61,7 +64,7 @@ export class Router {
       '/configuracoes': 'Configurações',
       '/consulta-notas': 'Notas Importadas (ADN)',
     };
-    return titles[hash] || 'Página';
+    return titles[path] || 'Página';
   }
 
   start() {

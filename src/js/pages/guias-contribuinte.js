@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Portal do Contribuinte (Apurações e Guias Mensais — Production Ready)
+ * NFS-e Freire — Portal do Contribuinte (Apurações e Guias Mensais — Production Ready)
  */
 import { getSession } from '../auth.js';
 import { maskCNPJ } from '../fiscal-utils.js';
@@ -59,7 +59,7 @@ export function renderGuiasContribuinte(container) {
         </div>
         <div class="card-body">
           <p style="color: var(--color-neutral-400); font-size: 0.9rem;">Escaneie o QR Code abaixo para pagar via PIX.</p>
-          <div style="background: white; padding: 20px; border-radius: 8px; display: inline-block; margin: 20px 0;"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=antigravity" alt="QR Code"></div>
+          <div style="background: white; padding: 20px; border-radius: 8px; display: inline-block; margin: 20px 0;"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=freire" alt="QR Code"></div>
           <div style="margin-bottom: 20px;"><strong style="font-size: 1.5rem;" id="modal-pix-valor">R$ 0,00</strong></div>
                     <input type="text" class="form-input text-mono" id="pix-payload" readonly value="..." style="text-align: center; font-size: 0.8rem; margin-bottom: 10px;">
           <button class="btn btn-secondary w-full" id="btn-copiar-pix" style="margin-bottom: 10px;">📋 Copiar Código PIX</button>

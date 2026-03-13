@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Eventos Page
+ * NFS-e Freire — Eventos Page
  * Cancelamento, Substituição, Manifestação, Análise Fiscal
  * Ref: requisitos-nfse-rtc-v2.md seção 7
  */

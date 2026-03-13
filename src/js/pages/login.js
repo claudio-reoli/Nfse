@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Tela de Autenticação (Production Ready)
+ * NFS-e Freire — Tela de Autenticação (Production Ready)
  */
 import { login as authLogin, ROLES, AUTH_LEVELS } from '../auth.js';
 import { login as apiLogin, loginByCertificate } from '../api-service.js';
@@ -68,6 +68,9 @@ export function renderLogin(container) {
 
         <p style="text-align: center; color: var(--color-neutral-500); font-size: 0.70rem; margin-top: 12px; margin-bottom: 0;">
           Acesso seguro via JWT e Auditoria RBAC.
+        </p>
+        <p style="text-align: center; margin-top: 16px;">
+          <a href="dashboard-municipio.html#/login" style="font-size: 0.8rem; color: var(--color-primary-400); text-decoration: none;">🏢 Acesso ao Portal do Município</a>
         </p>
       </div>
     </div>

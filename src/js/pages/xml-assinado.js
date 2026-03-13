@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Visualização de XML Assinado
+ * NFS-e Freire — Visualização de XML Assinado
  * Renderiza o XML da última DPS enviada com assinatura digital para conferência.
  */
 import { toast } from '../toast.js';

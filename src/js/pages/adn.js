@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Integração ADN (Ambiente de Dados Nacional)
+ * NFS-e Freire — Integração ADN (Ambiente de Dados Nacional)
  * Distribuição por NSU, compartilhamento de DF-e, DANFSe
  */
 import { toast } from '../toast.js';

@@ -2,7 +2,7 @@
 
 **Versão 1.0 — Março de 2026**
 
-Este documento detalha os requisitos do **Sistema Nacional NFS-e (ADN e Reforma Tributária)** que **não foram implementados** na versão atual (v1.1.0) do Antigravity Web Client, classificando-os como itens fora do escopo atual ou limitações técnicas provisórias, e define como eles devem ser abordados em uma etapa futura.
+Este documento detalha os requisitos do **Sistema Nacional NFS-e (ADN e Reforma Tributária)** que **não foram implementados** na versão atual (v1.1.0) do Freire Web Client, classificando-os como itens fora do escopo atual ou limitações técnicas provisórias, e define como eles devem ser abordados em uma etapa futura.
 
 ---
 
@@ -29,7 +29,7 @@ Os itens abaixo foram omitidos da versão atual pois não fazem parte do escopo 
 * **Status:** Não Implementado (❌)
 * **Motivo:** O Certificado Digital A3 é gravado em hardware físico (smart card ou token USB). Navegadores web modernos operam em "sandbox" (ambiente isolado) e não têm permissão para acessar o hardware físico da máquina do usuário nativamente sem o intermédio de componentes externos.
 * **Proposta para o Futuro:** 
-  Para suportar o Certificado A3, será necessário desenvolver um **Componente Conector Local (Desktop/Tray App)** via Java, C\#, ou C++ que acesse o *crypto driver* (PKCS#11) da máquina do usuário e exponha um servidor local em `localhost` para que a aplicação web (Antigravity) possa enviar o hash do XML da DPS para ser assinado, retornando a assinatura final.
+  Para suportar o Certificado A3, será necessário desenvolver um **Componente Conector Local (Desktop/Tray App)** via Java, C\#, ou C++ que acesse o *crypto driver* (PKCS#11) da máquina do usuário e exponha um servidor local em `localhost` para que a aplicação web (Freire) possa enviar o hash do XML da DPS para ser assinado, retornando a assinatura final.
 
 ### 1.2. MAN (Módulo de Apuração Nacional)
 * **Status:** Não Implementado (❌)
@@ -79,7 +79,7 @@ Os itens a seguir possuem estruturas ou *stubs* no código, mas foram limitados 
 
 ## 3. Estratégia para a Próxima Fase (Roadmap)
 
-A tabela abaixo sumariza as prioridades de evolução tecnológica do Antigravity NFS-e com base nestes gaps:
+A tabela abaixo sumariza as prioridades de evolução tecnológica do Freire NFS-e com base nestes gaps:
 
 | Fase | Título | Foco / Ação | Prioridade | Complexidade |
 |------|--------|-------------|------------|--------------|
@@ -90,4 +90,4 @@ A tabela abaixo sumariza as prioridades de evolução tecnológica do Antigravit
 | **V2.4** | **Gestão do MAN** | Estudo de P&D nas APIs de arrecadação da RFB para construção do módulo consolidador do Simples/MAN. | 🟢 Baixa | Média |
 
 ---
-*Gerado por Antigravity AI — Março de 2026.*
+*Gerado por Freire AI — Março de 2026.*

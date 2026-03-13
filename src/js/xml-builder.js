@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — XML Builder
+ * NFS-e Freire — XML Builder
  * Gera DPS XML conforme XSD v1.01 (TCDPS → TCInfDPS)
  * Ref: tiposComplexos_v1.01.xsd linhas 736-847
  */
@@ -57,7 +57,7 @@ export function buildDPSXml(formData) {
   // Identificação
   infDPS.appendChild(el(doc, 'tpAmb', formData.tpAmb));
   infDPS.appendChild(el(doc, 'dhEmi', formatDhEmi(formData.dhEmi)));
-  infDPS.appendChild(el(doc, 'verAplic', formData.verAplic || 'Antigravity-1.0'));
+  infDPS.appendChild(el(doc, 'verAplic', formData.verAplic || 'Freire-1.0'));
   infDPS.appendChild(el(doc, 'serie', String(formData.serie).padStart(5, '0')));
   infDPS.appendChild(el(doc, 'nDPS', String(formData.nDPS).padStart(15, '0')));
   infDPS.appendChild(el(doc, 'dCompet', formatDate(formData.dCompet)));
@@ -127,7 +127,18 @@ export function buildDPSXml(formData) {
     addIf(toma, doc, 'IM', formData.tomaIM);
     toma.appendChild(el(doc, 'xNome', formData.tomaXNome));
 
-    if (formData.tomaCEP || formData.tomaXLgr) {
+    const isTomaEstrangeiro = formData.tomaTipoDoc === 'NIF';
+    if (isTomaEstrangeiro && (formData.tomaCPais || formData.tomaXCidade)) {
+      const end = el(doc, 'end');
+      const endExt = el(doc, 'endExt');
+      addIf(endExt, doc, 'cPais', (formData.tomaCPais || '').toUpperCase());
+      addIf(endExt, doc, 'cEndPost', formData.tomaCEndPost);
+      addIf(endExt, doc, 'xCidade', formData.tomaXCidade);
+      addIf(endExt, doc, 'xEstProvReg', formData.tomaXEstProv);
+      addIf(endExt, doc, 'xLgr', formData.tomaXLgrExt);
+      end.appendChild(endExt);
+      toma.appendChild(end);
+    } else if (formData.tomaCEP || formData.tomaXLgr) {
       const end = el(doc, 'end');
       const endNac = el(doc, 'endNac');
       addIf(endNac, doc, 'cMun', formData.tomaCMun);
@@ -446,6 +457,11 @@ export function collectDPSFormData() {
     tomaNro: val('toma-nro'),
     tomaXBairro: val('toma-xBairro'),
     tomaCMun: val('toma-cMun'),
+    tomaCPais: val('toma-cPais'),
+    tomaCEndPost: val('toma-cEndPost'),
+    tomaXCidade: val('toma-xCidade'),
+    tomaXEstProv: val('toma-xEstProv'),
+    tomaXLgrExt: val('toma-xLgr-ext'),
     tomaEmail: val('toma-email'),
     // Serviço
     cTribNac: val('serv-cTribNac'),

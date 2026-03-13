@@ -1,4 +1,4 @@
-# Stack Tecnológica — NFS-e Antigravity
+# Stack Tecnológica — NFS-e Freire
 
 Sistema Web NFS-e Padrão Nacional — Emissão, Consulta e Gestão de Notas Fiscais de Serviço Eletrônica.
 

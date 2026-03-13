@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- NFSe Freire — Conexão PostgreSQL para importar no DBeaver -->
+<!-- File → Import → Custom → Connections from XML -->
+<connections>
+  <connection
+    name="NFSe PostgreSQL (localhost:5433)"
+    host="localhost"
+    port="5433"
+    server=""
+    database="nfse"
+    url="jdbc:postgresql://localhost:5433/nfse"
+    user="nfse"
+    password="nfse_dev"
+    type="dev"/>
+</connections>
+

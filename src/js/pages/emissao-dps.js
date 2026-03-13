@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Emissão de DPS
+ * NFS-e Freire — Emissão de DPS
  * Formulário dinâmico com campos conformes ao XSD v1.01
  * Ref: requisitos-nfse-rtc-v2.md seção 3
  */
@@ -8,6 +8,7 @@ import { toast } from '../toast.js';
 import { buildDPSXml, collectDPSFormData, validateDPSForm, prettyPrintXml, downloadXml } from '../xml-builder.js';
 import { getCertStore, signXml } from '../digital-signature.js';
 import { safeFetch, enviarDPS, consultarCNPJ } from '../api-service.js';
+import { buscarMunicipiosPorUF } from '../municipios-ibge.js';
 import { getSession } from '../auth.js';
 
 export function renderEmissaoDPS(container) {
@@ -81,9 +82,16 @@ export function renderEmissaoDPS(container) {
             </select>
           </div>
           <div class="form-group">
+            <label class="form-label">UF</label>
+            <input class="form-input" id="dps-uf" type="text" maxlength="2" placeholder="SP" style="text-transform: uppercase;">
+          </div>
+          <div class="form-group" style="flex: 1;">
             <label class="form-label">Município Emissor (IBGE) <span class="required">*</span></label>
-            <input class="form-input form-input-mono" id="dps-cLocEmi" type="text" maxlength="7" placeholder="3550308">
-            <span class="form-help">Código IBGE com 7 dígitos</span>
+            <div class="municipio-select-wrapper">
+              <input type="text" class="form-input municipio-display" id="dps-cLocEmi-display" placeholder="UF + nome..." list="dps-cLocEmi-list" autocomplete="off">
+              <input type="hidden" id="dps-cLocEmi">
+              <datalist id="dps-cLocEmi-list"></datalist>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Data/Hora Emissão <span class="required">*</span></label>
@@ -102,7 +110,7 @@ export function renderEmissaoDPS(container) {
           </div>
           <div class="form-group">
             <label class="form-label">Versão do Aplicativo</label>
-            <input class="form-input" id="dps-verAplic" type="text" maxlength="20" value="Antigravity-1.0">
+            <input class="form-input" id="dps-verAplic" type="text" maxlength="20" value="Freire-1.0">
           </div>
         </div>
       </div>
@@ -178,8 +186,16 @@ export function renderEmissaoDPS(container) {
             <input class="form-input" id="prest-xBairro" type="text" maxlength="60">
           </div>
           <div class="form-group">
+            <label class="form-label">UF</label>
+            <input class="form-input" id="prest-uf" type="text" maxlength="2" placeholder="SP" style="text-transform: uppercase;">
+          </div>
+          <div class="form-group" style="flex: 1;">
             <label class="form-label">Município (IBGE) <span class="required">*</span></label>
-            <input class="form-input form-input-mono" id="prest-cMun" type="text" maxlength="7">
+            <div class="municipio-select-wrapper">
+              <input type="text" class="form-input municipio-display" id="prest-cMun-display" placeholder="UF + nome..." list="prest-cMun-list" autocomplete="off">
+              <input type="hidden" id="prest-cMun">
+              <datalist id="prest-cMun-list"></datalist>
+            </div>
           </div>
         </div>
 
@@ -215,6 +231,7 @@ export function renderEmissaoDPS(container) {
               <option value="NIF">NIF (Exterior)</option>
             </select>
           </div>
+          <div id="toma-tipoDoc-hint" class="hidden" style="margin-top:4px;font-size:0.8rem;color:var(--color-warning-400);">Tomador estrangeiro: use endereço exterior (País, Cidade, Cód. Postal)</div>
           <div class="form-group">
             <label class="form-label">Documento <span class="required">*</span></label>
             <input class="form-input form-input-mono" id="toma-doc" type="text">
@@ -236,6 +253,7 @@ export function renderEmissaoDPS(container) {
           <span class="icon">📍</span>Endereço do Tomador
         </div>
 
+        <div id="toma-end-nacional">
         <div class="form-row mb-4">
           <div class="form-group">
             <label class="form-label">CEP <span class="required">*</span></label>
@@ -257,12 +275,49 @@ export function renderEmissaoDPS(container) {
             <input class="form-input" id="toma-xBairro" type="text" maxlength="60">
           </div>
           <div class="form-group">
+            <label class="form-label">UF</label>
+            <input class="form-input" id="toma-uf" type="text" maxlength="2" placeholder="SP" style="text-transform: uppercase;">
+          </div>
+          <div class="form-group" style="flex: 1;">
             <label class="form-label">Município (IBGE) <span class="required">*</span></label>
-            <input class="form-input form-input-mono" id="toma-cMun" type="text" maxlength="7">
+            <div class="municipio-select-wrapper">
+              <input type="text" class="form-input municipio-display" id="toma-cMun-display" placeholder="UF + nome..." list="toma-cMun-list" autocomplete="off">
+              <input type="hidden" id="toma-cMun">
+              <datalist id="toma-cMun-list"></datalist>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">E-mail</label>
             <input class="form-input" id="toma-email" type="email" maxlength="80">
+          </div>
+        </div>
+        </div>
+
+        <div id="toma-end-exterior" class="hidden" style="padding:var(--space-4);background:rgba(251,191,36,0.08);border-radius:var(--radius-lg);border:1px solid rgba(251,191,36,0.2);">
+          <div style="font-weight:600;color:var(--color-warning-400);margin-bottom:var(--space-3);">Endereço Exterior (Tomador Estrangeiro)</div>
+          <div class="form-row mb-4">
+            <div class="form-group">
+              <label class="form-label">País (ISO) <span class="required">*</span></label>
+              <input class="form-input form-input-mono" id="toma-cPais" type="text" maxlength="2" placeholder="PT">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cód. Postal</label>
+              <input class="form-input form-input-mono" id="toma-cEndPost" type="text" maxlength="11">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cidade</label>
+              <input class="form-input" id="toma-xCidade" type="text" maxlength="60">
+            </div>
+          </div>
+          <div class="form-row mb-4">
+            <div class="form-group">
+              <label class="form-label">Logradouro</label>
+              <input class="form-input" id="toma-xLgr-ext" type="text" maxlength="255">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Estado/Província</label>
+              <input class="form-input" id="toma-xEstProv" type="text" maxlength="60">
+            </div>
           </div>
         </div>
       </div>
@@ -347,8 +402,16 @@ export function renderEmissaoDPS(container) {
 
         <div class="form-row mb-4">
           <div class="form-group">
+            <label class="form-label">UF</label>
+            <input class="form-input" id="serv-uf" type="text" maxlength="2" placeholder="SP" style="text-transform: uppercase;">
+          </div>
+          <div class="form-group" style="flex: 1;">
             <label class="form-label">Local da Prestação (Mun. IBGE) <span class="required">*</span></label>
-            <input class="form-input form-input-mono" id="serv-cLocPrest" type="text" maxlength="7">
+            <div class="municipio-select-wrapper">
+              <input type="text" class="form-input municipio-display" id="serv-cLocPrest-display" placeholder="UF + nome..." list="serv-cLocPrest-list" autocomplete="off">
+              <input type="hidden" id="serv-cLocPrest">
+              <datalist id="serv-cLocPrest-list"></datalist>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Tipo de Local da Prestação</label>
@@ -747,8 +810,16 @@ export function renderEmissaoDPS(container) {
         </div>
         <div class="form-row mb-4">
           <div class="form-group">
+            <label class="form-label">UF</label>
+            <input class="form-input" id="dest-uf" type="text" maxlength="2" placeholder="SP" style="text-transform: uppercase;">
+          </div>
+          <div class="form-group" style="flex: 1;">
             <label class="form-label">Município (IBGE)</label>
-            <input class="form-input form-input-mono" id="dest-cMun" type="text" maxlength="7">
+            <div class="municipio-select-wrapper">
+              <input type="text" class="form-input municipio-display" id="dest-cMun-display" placeholder="UF + nome..." list="dest-cMun-list" autocomplete="off">
+              <input type="hidden" id="dest-cMun">
+              <datalist id="dest-cMun-list"></datalist>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Telefone</label>
@@ -788,8 +859,16 @@ export function renderEmissaoDPS(container) {
             <input class="form-input form-input-mono" id="imovel-cCIB" type="text" maxlength="8">
           </div>
           <div class="form-group">
+            <label class="form-label">UF</label>
+            <input class="form-input" id="imovel-uf" type="text" maxlength="2" placeholder="SP" style="text-transform: uppercase;">
+          </div>
+          <div class="form-group" style="flex: 1;">
             <label class="form-label">Município (IBGE)</label>
-            <input class="form-input form-input-mono" id="imovel-cMun" type="text" maxlength="7">
+            <div class="municipio-select-wrapper">
+              <input type="text" class="form-input municipio-display" id="imovel-cMun-display" placeholder="UF + nome..." list="imovel-cMun-list" autocomplete="off">
+              <input type="hidden" id="imovel-cMun">
+              <datalist id="imovel-cMun-list"></datalist>
+            </div>
           </div>
         </div>
         <div class="form-row mb-4">
@@ -908,9 +987,46 @@ export function renderEmissaoDPS(container) {
 
   setupTabs();
   setupMasks();
+  setupMunicipioSelects();
   setupConditionalFields();
   setupCalculations();
   setupFormActions();
+}
+
+function setupMunicipioSelects() {
+  const pairs = [
+    { ufId: 'dps-uf', displayId: 'dps-cLocEmi-display', hiddenId: 'dps-cLocEmi', listId: 'dps-cLocEmi-list' },
+    { ufId: 'serv-uf', displayId: 'serv-cLocPrest-display', hiddenId: 'serv-cLocPrest', listId: 'serv-cLocPrest-list' },
+    { ufId: 'dest-uf', displayId: 'dest-cMun-display', hiddenId: 'dest-cMun', listId: 'dest-cMun-list' },
+    { ufId: 'imovel-uf', displayId: 'imovel-cMun-display', hiddenId: 'imovel-cMun', listId: 'imovel-cMun-list' },
+    { ufId: 'prest-uf', displayId: 'prest-cMun-display', hiddenId: 'prest-cMun', listId: 'prest-cMun-list' },
+    { ufId: 'toma-uf', displayId: 'toma-cMun-display', hiddenId: 'toma-cMun', listId: 'toma-cMun-list' },
+  ];
+  pairs.forEach(({ ufId, displayId, hiddenId, listId }) => {
+    const ufEl = document.getElementById(ufId);
+    const dispEl = document.getElementById(displayId);
+    const hidEl = document.getElementById(hiddenId);
+    const listEl = document.getElementById(listId);
+    if (!ufEl || !dispEl || !hidEl || !listEl) return;
+    const load = async () => {
+      const uf = ufEl.value?.trim().toUpperCase();
+      if (!uf || uf.length !== 2) return;
+      try {
+        const lista = await buscarMunicipiosPorUF(uf);
+        listEl.innerHTML = lista.map(m => `<option value="${m.display}" data-code="${m.id}">`).join('');
+      } catch (_) {}
+    };
+    ufEl.addEventListener('change', load);
+    ufEl.addEventListener('blur', load);
+    dispEl.addEventListener('change', () => {
+      const opt = Array.from(listEl.querySelectorAll('option')).find(o => o.value === dispEl.value);
+      if (opt) hidEl.value = opt.dataset.code || '';
+    });
+    dispEl.addEventListener('input', () => {
+      const opt = Array.from(listEl.querySelectorAll('option')).find(o => o.value === dispEl.value);
+      hidEl.value = opt ? (opt.dataset.code || '') : dispEl.value.replace(/\D/g, '').slice(0, 7);
+    });
+  });
 }
 
 function setupTabs() {
@@ -1021,7 +1137,14 @@ async function setupCNPJAutoFill(prefix, docElement, tipoElement) {
       setField('nro', data.numero);
       setField('xCpl', data.complemento);
       setField('xBairro', data.bairro);
+      setField('uf', data.uf);
       setField('cMun', data.codigoIbge);
+      const munDisplayEl = document.getElementById(`${prefix}-cMun-display`);
+      if (munDisplayEl && data.municipio && data.uf) {
+        const displayText = `${data.municipio} (${data.uf}) — IBGE: ${data.codigoIbge || ''}`;
+        if (munDisplayEl.tagName === 'INPUT') munDisplayEl.value = displayText;
+        else { munDisplayEl.textContent = displayText; munDisplayEl.style.display = ''; }
+      }
       setField('email', data.email);
       setField('fone', data.telefone ? maskPhone(data.telefone.split('/')[0].trim()) : '');
       
@@ -1050,6 +1173,22 @@ function setupConditionalFields() {
       const show = destCPais.value.trim() && destCPais.value.trim().toUpperCase() !== 'BR';
       destExtFields.style.display = show ? '' : 'none';
     });
+  }
+
+  // Tomador NIF (estrangeiro): alterna endereço nacional / exterior
+  const tomaTipoDoc = document.getElementById('toma-tipoDoc');
+  const tomaEndNac = document.getElementById('toma-end-nacional');
+  const tomaEndExt = document.getElementById('toma-end-exterior');
+  const tomaTipoHint = document.getElementById('toma-tipoDoc-hint');
+  if (tomaTipoDoc && tomaEndNac && tomaEndExt) {
+    const toggle = () => {
+      const isNIF = tomaTipoDoc.value === 'NIF';
+      tomaEndNac.classList.toggle('hidden', isNIF);
+      tomaEndExt.classList.toggle('hidden', !isNIF);
+      if (tomaTipoHint) tomaTipoHint.classList.toggle('hidden', !isNIF);
+    };
+    tomaTipoDoc.addEventListener('change', toggle);
+    toggle();
   }
 
   // ─── Dynamic Lists in Complementos Tab ────────────

@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Digital Signature Module (Production Ready)
+ * NFS-e Freire — Digital Signature Module (Production Ready)
  * Uses node-forge for robust PKCS#12 parsing and Web Crypto for hardware-accelerated signing.
  */
 import forge from 'https://cdn.jsdelivr.net/npm/node-forge@1.3.1/+esm';

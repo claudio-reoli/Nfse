@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Configurações
+ * NFS-e Freire — Configurações
  * Certificado Digital (carga, validação, alerta de vencimento)
  * Ambiente, URLs e preferências do sistema
  */
@@ -12,8 +12,9 @@ import {
   getCertSummary,
   isCertificateValid,
 } from '../digital-signature.js';
-import { setEnvironment, getEnvironment, setDemoMode, consultarCNPJ } from '../api-service.js';
+import { setEnvironment, setDemoMode, fetchConfigAmbiente, consultarCNPJ } from '../api-service.js';
 import { maskCNPJ, maskCEP } from '../fiscal-utils.js';
+import { buscarMunicipiosPorUF } from '../municipios-ibge.js';
 
 // ─── Persistência em localStorage ──────────────────────
 const STORAGE_KEY = 'nfse_settings';
@@ -39,6 +40,8 @@ function getDefaults() {
       inscMunicipal: '',
       regimeTrib: '1',
       codMunicipio: '',
+      municipio: '',
+      uf: '',
       email: '',
     },
     emailNotificacoes: '',
@@ -244,35 +247,41 @@ export function renderConfiguracoes(container) {
       </div>
       <div class="card-body">
         <div id="amb-view-mode">
-          ${renderAmbView(settings)}
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-4); flex-wrap: wrap; gap: var(--space-2);">
+            <p class="text-muted" style="font-size: var(--text-xs); margin: 0;">Configurado no módulo Município (Configurações)</p>
+            <button class="btn btn-ghost btn-sm" id="cfg-amb-refresh" title="Atualizar ambiente do município">🔄 Atualizar</button>
+          </div>
+          <div class="grid grid-2 gap-4">
+            <div class="form-group">
+              <label class="form-label">Ambiente</label>
+              <div><span id="cfg-amb-badge" class="badge badge-warning">⚡ Sandbox</span></div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Modo Demo</label>
+              <div><span id="cfg-demo-badge" class="badge ${settings.demoMode ? 'badge-primary' : 'badge-success'}">${settings.demoMode ? '🎭 Ativo' : '🔌 Desativado'}</span></div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">URL Sefin Nacional</label>
+              <input class="form-input form-input-mono" id="cfg-url-sefin-display" type="text" readonly value="">
+            </div>
+            <div class="form-group">
+              <label class="form-label">URL ADN (Ambiente de Dados Nacional)</label>
+              <input class="form-input form-input-mono" id="cfg-url-adn-display" type="text" readonly value="">
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <span class="text-muted" style="font-size: var(--text-xs);">E-MAIL REMETENTE DAS NOTIFICAÇÕES:</span>
+              <span id="cfg-email-display" style="font-size: var(--text-sm); color: var(--color-neutral-200); margin-left: var(--space-2);">${settings.emailNotificacoes || 'Não configurado'}</span>
+            </div>
+          </div>
         </div>
         <div id="amb-edit-mode" class="hidden">
           <div class="form-row mb-4">
-            <div class="form-group">
-              <label class="form-label">Ambiente de Operação</label>
-              <select class="form-select" id="cfg-ambiente">
-                <option value="sandbox" ${settings.ambiente === 'sandbox' ? 'selected' : ''}>Produção Restrita (Sandbox)</option>
-                <option value="production" ${settings.ambiente === 'production' ? 'selected' : ''}>Produção</option>
-              </select>
-            </div>
             <div class="form-group">
               <label class="form-label">Modo Demo (API simulada)</label>
               <select class="form-select" id="cfg-demo">
                 <option value="true" ${settings.demoMode ? 'selected' : ''}>Ativo — Respostas simuladas</option>
                 <option value="false" ${!settings.demoMode ? 'selected' : ''}>Desativado — APIs reais</option>
               </select>
-            </div>
-          </div>
-          <div class="form-row mb-4">
-            <div class="form-group">
-              <label class="form-label">URL Sefin Nacional</label>
-              <input class="form-input form-input-mono" type="text" id="cfg-url-sefin"
-                     value="${settings.ambiente === 'production' ? 'sefin.nfse.gov.br' : 'sefin.producaorestrita.nfse.gov.br'}" readonly>
-            </div>
-            <div class="form-group" style="flex: 1;">
-              <label class="form-label">URL ADN</label>
-              <input class="form-input form-input-mono" type="text" id="cfg-url-adn"
-                     value="${settings.ambiente === 'production' ? 'adn.nfse.gov.br' : 'adn.producaorestrita.nfse.gov.br'}" readonly>
             </div>
           </div>
           <div class="form-row mb-4">
@@ -283,7 +292,7 @@ export function renderConfiguracoes(container) {
           </div>
           <div style="display: flex; gap: var(--space-2); justify-content: flex-end;">
             <button class="btn btn-secondary" id="cfg-amb-cancel">Cancelar</button>
-            <button class="btn btn-primary" id="cfg-amb-save">Salvar Ambiente</button>
+            <button class="btn btn-primary" id="cfg-amb-save">Salvar</button>
           </div>
         </div>
       </div>
@@ -306,7 +315,7 @@ export function renderConfiguracoes(container) {
           </div>
           <div style="padding: var(--space-3); background: var(--surface-glass); border-radius: var(--radius-md);">
             <div style="font-size: var(--text-xs); color: var(--color-neutral-500); text-transform: uppercase;">Framework</div>
-            <div style="font-weight: 700; color: var(--color-warning-400);">Antigravity ADN</div>
+            <div style="font-weight: 700; color: var(--color-warning-400);">Freire</div>
           </div>
         </div>
       </div>
@@ -466,6 +475,9 @@ export function renderConfiguracoes(container) {
   document.getElementById('cfg-contrib-save')?.addEventListener('click', () => {
     const val = (id) => document.getElementById(id)?.value?.trim() || '';
     const settings = loadSettings();
+    const dispVal = document.getElementById('cfg-codmun-display')?.value || '';
+    const opt = Array.from(document.getElementById('cfg-codmun-list')?.querySelectorAll('option') || []).find(o => o.value === dispVal);
+    const prev = settings.contribuinte || {};
     settings.contribuinte = {
       cnpj: val('cfg-cnpj').replace(/\D/g, ''),
       razaoSocial: val('cfg-razao'),
@@ -473,6 +485,8 @@ export function renderConfiguracoes(container) {
       inscMunicipal: val('cfg-im'),
       regimeTrib: val('cfg-regime'),
       codMunicipio: val('cfg-codmun'),
+      municipio: opt?.dataset?.nome || prev.municipio || '',
+      uf: opt?.dataset?.uf || val('cfg-uf') || prev.uf || '',
       email: val('cfg-email'),
     };
     saveSettings(settings);
@@ -507,49 +521,69 @@ export function renderConfiguracoes(container) {
     document.getElementById('cfg-amb-edit').classList.remove('hidden');
   });
 
+  const applyConfig = (data) => {
+    const amb = data?.ambiente || 'sandbox';
+    const urlSefin = data?.urlSefin || (amb === 'production' ? 'sefin.nfse.gov.br' : 'sefin.producaorestrita.nfse.gov.br');
+    const urlAdn = data?.urlAdn || (amb === 'production' ? 'adn.nfse.gov.br' : 'adn.producaorestrita.nfse.gov.br');
+    setEnvironment(amb);
+    try { localStorage.setItem('nfse_last_ambiente', amb); } catch (_) {}
+    const badge = document.getElementById('cfg-amb-badge');
+    const sefinEl = document.getElementById('cfg-url-sefin-display');
+    const adnEl = document.getElementById('cfg-url-adn-display');
+    if (badge) {
+      badge.textContent = amb === 'production' ? '🔴 Produção' : '⚡ Sandbox';
+      badge.className = 'badge ' + (amb === 'production' ? 'badge-danger' : 'badge-warning');
+    }
+    if (sefinEl) sefinEl.value = urlSefin;
+    if (adnEl) adnEl.value = urlAdn;
+  };
+
+  async function loadAmbienteFromBackend() {
+    try {
+      const data = await fetchConfigAmbiente();
+      if (data && (data.ambiente || data.urlSefin || data.urlAdn)) {
+        applyConfig(data);
+        window.dispatchEvent(new CustomEvent('nfse_ambiente_loaded', { detail: data }));
+        return true;
+      }
+      applyConfig({ ambiente: 'sandbox' });
+      toast.warning('Ambiente carregado com valor padrão. Verifique a conexão.');
+    } catch (err) {
+      applyConfig({ ambiente: 'sandbox' });
+      toast.warning('Não foi possível carregar o ambiente do município. Verifique a conexão.');
+    }
+    return false;
+  }
+
+  loadAmbienteFromBackend();
+
+  document.getElementById('cfg-amb-refresh')?.addEventListener('click', async () => {
+    const btn = document.getElementById('cfg-amb-refresh');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Carregando...'; }
+    await loadAmbienteFromBackend();
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Atualizar'; }
+  });
+
   document.getElementById('cfg-amb-save')?.addEventListener('click', () => {
     const settings = loadSettings();
-    settings.ambiente = document.getElementById('cfg-ambiente')?.value || 'sandbox';
     settings.demoMode = document.getElementById('cfg-demo')?.value === 'true';
     settings.emailNotificacoes = document.getElementById('cfg-email-notif')?.value || '';
     saveSettings(settings);
-
-    setEnvironment(settings.ambiente);
     setDemoMode(settings.demoMode);
 
-    // Atualiza URLs
-    const sefin = settings.ambiente === 'production' ? 'sefin.nfse.gov.br' : 'sefin.producaorestrita.nfse.gov.br';
-    const adn = settings.ambiente === 'production' ? 'adn.nfse.gov.br' : 'adn.producaorestrita.nfse.gov.br';
-    const urlSefin = document.getElementById('cfg-url-sefin');
-    const urlAdn = document.getElementById('cfg-url-adn');
-    if (urlSefin) urlSefin.value = sefin;
-    if (urlAdn) urlAdn.value = adn;
-
-    // Atualizar badge do header
-    const envBadge = document.querySelector('.env-badge');
-    if (envBadge) {
-      envBadge.textContent = settings.ambiente === 'production' ? '🔴 Produção' : '⚡ Sandbox';
-      envBadge.style.background = settings.ambiente === 'production'
-        ? 'linear-gradient(135deg, #DC2626, #B91C1C)'
-        : '';
+    const demoBadge = document.getElementById('cfg-demo-badge');
+    if (demoBadge) {
+      demoBadge.textContent = settings.demoMode ? '🎭 Ativo' : '🔌 Desativado';
+      demoBadge.className = 'badge ' + (settings.demoMode ? 'badge-primary' : 'badge-success');
     }
+    const emailDisplay = document.getElementById('cfg-email-display');
+    if (emailDisplay) emailDisplay.textContent = settings.emailNotificacoes || 'Não configurado';
 
-    document.getElementById('amb-view-mode').innerHTML = renderAmbView(settings);
     document.getElementById('amb-view-mode').classList.remove('hidden');
     document.getElementById('amb-edit-mode').classList.add('hidden');
     document.getElementById('cfg-amb-edit').classList.remove('hidden');
 
-    toast.success('Configurações de ambiente salvas!');
-  });
-
-  // Mudança de ambiente atualiza URLs em tempo real
-  document.getElementById('cfg-ambiente')?.addEventListener('change', (e) => {
-    const sefin = e.target.value === 'production' ? 'sefin.nfse.gov.br' : 'sefin.producaorestrita.nfse.gov.br';
-    const adn = e.target.value === 'production' ? 'adn.nfse.gov.br' : 'adn.producaorestrita.nfse.gov.br';
-    const urlSefin = document.getElementById('cfg-url-sefin');
-    const urlAdn = document.getElementById('cfg-url-adn');
-    if (urlSefin) urlSefin.value = sefin;
-    if (urlAdn) urlAdn.value = adn;
+    toast.success('Configurações salvas!');
   });
 
   // ─── Salvar Geral ─────────────────────────────
@@ -581,6 +615,30 @@ export function renderConfiguracoes(container) {
       e.target.value = maskCNPJ(e.target.value);
     });
 
+    // Município select: UF + datalist
+    const ufEl = document.getElementById('cfg-uf');
+    const dispEl = document.getElementById('cfg-codmun-display');
+    const hidEl = document.getElementById('cfg-codmun');
+    const datalistEl = document.getElementById('cfg-codmun-list');
+    const loadMunOpts = async () => {
+      const uf = ufEl?.value?.trim().toUpperCase();
+      if (!uf || uf.length !== 2 || !datalistEl) return;
+      try {
+        const lista = await buscarMunicipiosPorUF(uf);
+        datalistEl.innerHTML = lista.map(m => `<option value="${m.display}" data-code="${m.id}" data-nome="${(m.nome || '').replace(/"/g, '&quot;')}" data-uf="${m.uf || ''}">`).join('');
+      } catch (_) {}
+    };
+    ufEl?.addEventListener('change', loadMunOpts);
+    ufEl?.addEventListener('blur', loadMunOpts);
+    dispEl?.addEventListener('change', () => {
+      const opt = Array.from(datalistEl?.querySelectorAll('option') || []).find(o => o.value === dispEl.value);
+      if (opt) { hidEl.value = opt.dataset.code || ''; if (ufEl) ufEl.value = opt.dataset.uf || ufEl.value; }
+    });
+    dispEl?.addEventListener('input', () => {
+      const opt = Array.from(datalistEl?.querySelectorAll('option') || []).find(o => o.value === dispEl.value);
+      hidEl.value = opt ? (opt.dataset.code || '') : dispEl.value.replace(/\D/g, '').slice(0, 7);
+    });
+
     cnpjInput.addEventListener('blur', async (e) => {
       const val = e.target.value.replace(/\D/g, '');
       if (val.length === 14) {
@@ -592,7 +650,12 @@ export function renderConfiguracoes(container) {
           
           if (dados.razaoSocial) getEl('cfg-razao').value = dados.razaoSocial;
           if (dados.fantasia) getEl('cfg-fantasia').value = dados.fantasia;
-          if (dados.codigoIbge) getEl('cfg-codmun').value = dados.codigoIbge;
+          if (dados.codigoIbge) {
+            getEl('cfg-codmun').value = dados.codigoIbge;
+            const disp = getEl('cfg-codmun-display');
+            if (disp && dados.municipio && dados.uf) disp.value = `${dados.municipio} (${dados.uf}) — IBGE: ${dados.codigoIbge}`;
+          }
+          if (dados.uf) { const u = getEl('cfg-uf'); if (u) u.value = dados.uf; }
           if (dados.email) getEl('cfg-email').value = dados.email;
           
           toast.success('Dados do contribuinte sincronizados pela Receita!');
@@ -684,7 +747,7 @@ function renderContribView(c) {
       <div><span class="text-muted" style="font-size: var(--text-xs);">Nome Fantasia:</span> <span>${c.nomeFantasia || '—'}</span></div>
       <div><span class="text-muted" style="font-size: var(--text-xs);">Inscrição Municipal:</span> <span class="text-mono">${c.inscMunicipal || '—'}</span></div>
       <div><span class="text-muted" style="font-size: var(--text-xs);">Regime Tributário:</span> <span>${{'1': 'Simples Nacional', '2': 'SN — Excesso Sublimite', '3': 'Normal', '4': 'MEI'}[c.regimeTrib] || c.regimeTrib || '—'}</span></div>
-      <div><span class="text-muted" style="font-size: var(--text-xs);">Município (IBGE):</span> <span class="text-mono">${c.codMunicipio || '—'}</span></div>
+      <div><span class="text-muted" style="font-size: var(--text-xs);">Município (IBGE):</span> <span>${c.codMunicipio ? (c.municipio && c.uf ? `${c.municipio} (${c.uf}) — IBGE: ${c.codMunicipio}` : `Código IBGE: ${c.codMunicipio}`) : '—'}</span></div>
       <div style="grid-column: 1 / -1;"><span class="text-muted" style="font-size: var(--text-xs);">E-mail:</span> <span>${c.email || '—'}</span></div>
     </div>`;
 }
@@ -722,8 +785,18 @@ function renderContribEdit(c) {
         </select>
       </div>
       <div class="form-group">
+        <label class="form-label">UF</label>
+        <input class="form-input" id="cfg-uf" type="text" maxlength="2" placeholder="SP" style="text-transform: uppercase;" value="${c.uf || ''}">
+      </div>
+      <div class="form-group" style="flex: 1;">
         <label class="form-label">Município (IBGE)</label>
-        <input class="form-input form-input-mono" id="cfg-codmun" type="text" maxlength="7" placeholder="3550308" value="${c.codMunicipio || ''}">
+        <div class="municipio-select-wrapper">
+          <input type="text" class="form-input municipio-display" id="cfg-codmun-display"
+            placeholder="Selecione UF e busque por nome..." list="cfg-codmun-list" autocomplete="off"
+            value="${c.codMunicipio && c.municipio && c.uf ? `${c.municipio} (${c.uf}) — IBGE: ${c.codMunicipio}` : ''}">
+          <input type="hidden" id="cfg-codmun" value="${c.codMunicipio || ''}">
+          <datalist id="cfg-codmun-list"></datalist>
+        </div>
       </div>
     </div>
     <div class="form-row mb-4">
@@ -735,33 +808,6 @@ function renderContribEdit(c) {
     <div style="display: flex; gap: var(--space-2); justify-content: flex-end;">
       <button class="btn btn-secondary" id="cfg-contrib-cancel">Cancelar</button>
       <button class="btn btn-primary" id="cfg-contrib-save">💾 Salvar Dados</button>
-    </div>`;
-}
-
-function renderAmbView(settings) {
-  const sefin = settings.ambiente === 'production' ? 'sefin.nfse.gov.br' : 'sefin.producaorestrita.nfse.gov.br';
-  const adn = settings.ambiente === 'production' ? 'adn.nfse.gov.br' : 'adn.producaorestrita.nfse.gov.br';
-
-  return `
-    <div class="grid grid-2 gap-4">
-      <div>
-        <span class="text-muted" style="font-size: var(--text-xs);">AMBIENTE:</span>
-        <span class="badge ${settings.ambiente === 'production' ? 'badge-danger' : 'badge-warning'}" style="margin-left: var(--space-2);">
-          ${settings.ambiente === 'production' ? '🔴 Produção' : '⚡ Sandbox'}
-        </span>
-      </div>
-      <div>
-        <span class="text-muted" style="font-size: var(--text-xs);">MODO DEMO:</span>
-        <span class="badge ${settings.demoMode ? 'badge-primary' : 'badge-success'}" style="margin-left: var(--space-2);">
-          ${settings.demoMode ? '🎭 Ativo' : '🔌 Desativado'}
-        </span>
-      </div>
-      <div><span class="text-muted" style="font-size: var(--text-xs);">SEFIN:</span> <span class="text-mono" style="font-size: var(--text-sm);">${sefin}</span></div>
-      <div><span class="text-muted" style="font-size: var(--text-xs);">ADN:</span> <span class="text-mono" style="font-size: var(--text-sm);">${adn}</span></div>
-      <div style="grid-column: 1 / -1;">
-        <span class="text-muted" style="font-size: var(--text-xs);">E-MAIL REMETENTE DAS NOTIFICAÇÕES:</span> 
-        <span style="font-size: var(--text-sm); color: var(--color-neutral-200); margin-left: var(--space-2);">${settings.emailNotificacoes || 'Não configurado'}</span>
-      </div>
     </div>`;
 }
 

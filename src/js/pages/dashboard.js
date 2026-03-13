@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Dashboard Page (Production)
+ * NFS-e Freire — Dashboard Page (Production)
  */
 import { getCertSummary } from '../digital-signature.js';
 import { getDashboardStats, getHealthStatus } from '../api-service.js';
@@ -55,13 +55,15 @@ export async function renderDashboard(container) {
       <div class="stat-card" style="--stat-color: var(--color-danger-500)"><div class="stat-value" id="stat-canceladas">...</div><div class="stat-label">Canceladas</div></div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 280px; gap: var(--space-6);">
-      <div class="card">
+    <div class="dashboard-cards">
+      <div class="card" style="min-width: 0;">
         <div class="card-header"><h3 class="card-title">NFS-e Recentes</h3></div>
-        <div class="card-body" style="padding: 0;"><table class="data-table"><thead><tr><th>Chave</th><th>Prestador</th><th>Valor</th><th>Status</th></tr></thead><tbody id="recent-nfse-body"></tbody></table></div>
+        <div class="card-body table-container" style="padding: 0;">
+          <table class="data-table"><thead><tr><th>Chave</th><th>Prestador</th><th>Valor</th><th>Status</th></tr></thead><tbody id="recent-nfse-body"></tbody></table>
+        </div>
       </div>
 
-      <div class="card">
+      <div class="card" style="min-width: 0;">
         <div class="card-header"><h3 class="card-title">Status do Sistema</h3></div>
         <div class="card-body" id="system-health-panel">
           <div class="loading-spinner"></div>
@@ -73,24 +75,33 @@ export async function renderDashboard(container) {
   // Fetch real stats (Item 2)
   try {
     const statsResp = await getDashboardStats(session?.cnpj);
-    const stats = statsResp.data;
-    document.getElementById('stat-emitidas').textContent = stats.emitidas;
-    document.getElementById('stat-aprovadas').textContent = stats.aprovadas;
-    document.getElementById('stat-pendentes').textContent = stats.pendentes;
-    document.getElementById('stat-canceladas').textContent = stats.canceladas;
-    
+    const stats = statsResp?.data;
+    if (!stats) throw new Error('Resposta inválida');
+
+    document.getElementById('stat-emitidas').textContent = stats.emitidas ?? 0;
+    document.getElementById('stat-aprovadas').textContent = stats.aprovadas ?? 0;
+    document.getElementById('stat-pendentes').textContent = stats.pendentes ?? 0;
+    document.getElementById('stat-canceladas').textContent = stats.canceladas ?? 0;
+
+    const recentes = stats.recentes ?? [];
     const tbody = document.getElementById('recent-nfse-body');
-    if (stats.recentes.length === 0) {
+    if (recentes.length === 0) {
       tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px;">Nenhuma nota encontrada.</td></tr>';
     } else {
-      tbody.innerHTML = stats.recentes.map(d => `
+      tbody.innerHTML = recentes.map(d => {
+        const chave = d.chaveAcesso || '';
+        const nome = d.prestador?.xNome ?? d.prestador?.nome ?? '—';
+        const valor = d.valores?.vServ ?? d.valores?.vBC ?? d.valorServico ?? 0;
+        const status = d.status || 'Ativa';
+        return `
         <tr>
-          <td class="cell-mono">${d.chaveAcesso.slice(0, 10)}...${d.chaveAcesso.slice(-4)}</td>
-          <td class="truncate">${d.prestador.nome}</td>
-          <td style="font-variant-numeric: tabular-nums;">R$ ${d.valorServico.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-          <td><span class="badge ${d.status === 'Cancelada' ? 'badge-danger' : 'badge-success'}">${d.status}</span></td>
+          <td class="cell-mono">${chave ? chave.slice(0, 10) + '...' + chave.slice(-4) : '—'}</td>
+          <td class="truncate">${nome}</td>
+          <td style="font-variant-numeric: tabular-nums;">R$ ${Number(valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+          <td><span class="badge ${status === 'Cancelada' ? 'badge-danger' : 'badge-success'}">${status}</span></td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
     }
   } catch(e) { toast.error('Falha ao carregar estatísticas reais.'); }
 

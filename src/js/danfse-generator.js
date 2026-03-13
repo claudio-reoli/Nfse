@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — DANFSe Generator
+ * NFS-e Freire — DANFSe Generator
  * Gera PDF do Documento Auxiliar da NFS-e (via Canvas/Print)
  * Ref: requisitos-nfse-rtc-v2.md seção 2.4.3
  */
@@ -428,7 +428,7 @@ export function generateDANFSeHTML(nfseData) {
     
     <!-- Footer -->
     <div class="footer">
-      Documento Auxiliar da NFS-e (DANFSe) — Gerado pelo Sistema Antigravity ADN — 
+      Documento Auxiliar da NFS-e (DANFSe) — Gerado pelo Sistema Freire — 
       ${new Date().toLocaleString('pt-BR')} — Válido como representação gráfica da NFS-e
     </div>
   </div>

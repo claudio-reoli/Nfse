@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Tela de Autenticação (Módulo Município)
+ * NFS-e Freire — Tela de Autenticação (Módulo Município)
  */
 import { loginMun, MUN_ROLES } from '../auth-municipio.js';
 import { toast } from '../toast.js';
@@ -49,6 +49,9 @@ export function renderLoginMunicipio(container) {
         <p style="text-align: center; color: var(--color-neutral-500); font-size: 0.70rem; margin-top: 12px; margin-bottom: 0;">
           Acesso restrito. Suas ações são monitoradas pelos logs de auditoria municipal. 
         </p>
+        <p style="text-align: center; margin-top: 16px;">
+          <a href="index.html" style="font-size: 0.8rem; color: var(--color-primary-400); text-decoration: none;">🏛️ Voltar ao Portal do Contribuinte</a>
+        </p>
       </div>
 
     </div>
@@ -69,6 +72,7 @@ export function renderLoginMunicipio(container) {
     const roleName = MUN_ROLES[user.role] || user.role;
     toast.success(`Acesso autorizado! Bem-vindo, ${user.name}.`);
     loginMun(user.cpf, user.name, roleName);
+    localStorage.setItem('nfse_session', JSON.stringify({ token, cpf: user.cpf, name: user.name, role: roleName, cnpj: user.cnpj || '' }));
     window.location.hash = '/dashboard';
   };
 

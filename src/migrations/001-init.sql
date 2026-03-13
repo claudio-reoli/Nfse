@@ -1,4 +1,4 @@
--- NFSe Antigravity — Schema PostgreSQL
+-- NFSe Freire — Schema PostgreSQL
 -- Migração 001: Tabelas iniciais
 
 -- Configuração do município (single-row)
@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   cpf VARCHAR(14) UNIQUE NOT NULL,
   name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL DEFAULT '',
+  celular VARCHAR(20) NOT NULL DEFAULT '',
   role VARCHAR(20) NOT NULL,
   user_type VARCHAR(20) NOT NULL,
   password_hash TEXT NOT NULL,
@@ -104,3 +106,7 @@ ALTER TABLE apuracoes ADD COLUMN IF NOT EXISTS data_pagamento TIMESTAMPTZ;
 -- Inserir linha inicial para config e sync_state
 INSERT INTO config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 INSERT INTO sync_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+-- Usuários: e-mail e celular obrigatórios (migração 002)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255) NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS celular VARCHAR(20) NOT NULL DEFAULT '';

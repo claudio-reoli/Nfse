@@ -1,5 +1,5 @@
 /* ============================================================
-   NFS-e Antigravity — Layout System
+   NFS-e Freire — Layout System
    Sidebar + Header + Content Layout
    ============================================================ */
 
@@ -392,8 +392,10 @@
   grid-area: content;
   padding: var(--space-6);
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--surface-base);
   position: relative;
+  min-width: 0;
 }
 
 .main-content::before {
@@ -436,6 +438,19 @@
   display: flex;
   gap: var(--space-3);
   flex-shrink: 0;
+}
+
+/* ── Dashboard ─────────────────────────────────────────────── */
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  min-width: 0;
+}
+@media (min-width: 960px) {
+  .dashboard-cards {
+    grid-template-columns: 1fr minmax(200px, 280px);
+  }
 }
 
 /* ── Content Sections ──────────────────────────────────────── */

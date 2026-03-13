@@ -1,10 +1,11 @@
 /**
- * NFS-e Antigravity — Consulta NFS-e
+ * NFS-e Freire — Consulta NFS-e
  * Consulta por chave de acesso ou ID DPS
  */
 import { validateChaveNFSe, maskCNPJ, maskCurrency } from '../fiscal-utils.js';
 import { toast } from '../toast.js';
-import { safeFetch, consultarNFSe, consultarDPS } from '../api-service.js';
+import { formatMunicipioDisplaySync, formatEstrangeiroDisplay } from '../municipios-ibge.js';
+import { safeFetch, consultarNFSe, consultarNFSeLocal, consultarDPS } from '../api-service.js';
 import { openDANFSe } from '../danfse-generator.js';
 
 export function renderConsultaNFSe(container) {
@@ -202,10 +203,16 @@ export function renderConsultaNFSe(container) {
       toast.error('Chave de Acesso inválida. Deve conter exatamente 50 dígitos numéricos.');
       return;
     }
-    // Show result using API
-    toast.info('Consultando NFS-e na Sefin Nacional...');
+    toast.info('Consultando NFS-e...');
     try {
-      const response = await safeFetch(consultarNFSe, chave);
+      let response;
+      try {
+        response = await safeFetch(consultarNFSeLocal, chave);
+      } catch (localErr) {
+        if (localErr.status === 404 || localErr.message?.includes('404')) {
+          response = await safeFetch(consultarNFSe, chave);
+        } else throw localErr;
+      }
       if (response.ok) {
         const nfse = response.data.infNFSe || response.data;
         document.getElementById('result-chave').textContent = chave;
@@ -220,7 +227,8 @@ export function renderConsultaNFSe(container) {
         
         document.getElementById('result-status').textContent = `cStat: ${response.data.cStat} — ${response.data.cStat === '100' ? 'Autorizada' : 'Processada'}`;
         
-        const locEmi = nfse.locEmi || (nfse.emit && nfse.emit.xMun ? nfse.emit.xMun : 'São Paulo - SP');
+        const emit = nfse.emit || {};
+        const locEmi = nfse.locEmi || (emit.cMun ? formatMunicipioDisplaySync(emit.cMun, emit.xMun, emit.UF) : emit.xMun) || 'São Paulo - SP';
         document.getElementById('result-locEmi').textContent = locEmi;
 
         document.getElementById('result-amb').textContent = nfse.ambGer === '1' ? 'Produção' : 'Homologação';
@@ -229,14 +237,18 @@ export function renderConsultaNFSe(container) {
         if (nfse.emit) {
            document.getElementById('result-prest-doc').textContent = maskCNPJ(nfse.emit.CNPJ || '');
            document.getElementById('result-prest-nome').textContent = nfse.emit.xNome || 'N/A';
-           document.getElementById('result-prest-mun').textContent = nfse.emit.xMun || 'N/A';
+           const prestEnd = nfse.emit.endereco || nfse.emit.end || {};
+           const prestMun = (prestEnd.cPais && String(prestEnd.cPais).toUpperCase() !== 'BR') ? formatEstrangeiroDisplay(prestEnd.cPais, prestEnd.xCidade) : formatMunicipioDisplaySync(prestEnd.cMun || nfse.emit.cMun, prestEnd.xMun || nfse.emit.xMun, prestEnd.UF || nfse.emit.UF);
+           document.getElementById('result-prest-mun').textContent = prestMun || nfse.emit.xMun || 'N/A';
         }
 
         // Tomador
         if (nfse.toma) {
            document.getElementById('result-toma-doc').textContent = maskCNPJ(nfse.toma.CNPJ || nfse.toma.CPF || '');
            document.getElementById('result-toma-nome').textContent = nfse.toma.xNome || 'N/A';
-           document.getElementById('result-toma-mun').textContent = nfse.toma.xMun || 'N/A';
+           const tomaEnd = nfse.toma.endereco || nfse.toma.end || {};
+           const tomaMun = (tomaEnd.cPais && String(tomaEnd.cPais).toUpperCase() !== 'BR') ? formatEstrangeiroDisplay(tomaEnd.cPais, tomaEnd.xCidade) : formatMunicipioDisplaySync(tomaEnd.cMun || nfse.toma.cMun, tomaEnd.xMun || nfse.toma.xMun, tomaEnd.UF || nfse.toma.UF);
+           document.getElementById('result-toma-mun').textContent = tomaMun || nfse.toma.xMun || 'N/A';
         } else {
            document.getElementById('result-toma-doc').textContent = '—';
            document.getElementById('result-toma-nome').textContent = 'Consumidor Final / Não Informado';
@@ -288,7 +300,16 @@ export function renderConsultaNFSe(container) {
         toast.error('NFS-e não encontrada.');
       }
     } catch (err) {
-      toast.error(`Erro: ${err.message}`);
+      if (err.status === 403) {
+        const hint = err.responseData?.hint || '';
+        toast.error(
+          err.responseData?.error || 'Sem permissão para consultar esta NFS-e.' + (hint ? ` ${hint}` : '')
+        );
+      } else if (err.status === 401) {
+        toast.error('É necessário estar logado para consultar NFS-e.');
+      } else {
+        toast.error(`Erro: ${err.message}`);
+      }
     }
   });
 

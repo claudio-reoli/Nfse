@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Módulo Prefeitura (SPA)
+ * NFS-e Freire — Módulo Prefeitura (SPA)
  */
 import { Router } from './router.js';
 import { renderDashboardMunicipio } from './pages/dashboard-municipio.js';
@@ -10,12 +10,20 @@ import { renderConfiguracoesMunicipio } from './pages/configuracoes-municipio.js
 import { getMunSession, logoutMun, MUN_ROLES } from './auth-municipio.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (!getMunSession() && window.location.hash !== '#/login') {
-    window.location.hash = '/login';
-  }
-
   const contentEl = document.getElementById('main-content');
   if (!contentEl) return;
+
+  const session = getMunSession();
+  const rawHash = (window.location.hash || '').trim();
+  const path = rawHash.replace(/^#\/?/, '').trim() || 'dashboard';
+  const normalizedPath = path.startsWith('/') ? path : '/' + path;
+
+  // Sem sessão: sempre redirecionar para /login
+  if (!session) {
+    if (normalizedPath !== '/login') {
+      window.location.hash = '/login';
+    }
+  }
 
   // ─── Router Setup ────────────────────────────
   const router = new Router(contentEl);
@@ -26,8 +34,13 @@ document.addEventListener('DOMContentLoaded', () => {
     .register('/gestao-acessos', renderGestaoAcessosMun)
     .register('/configuracoes', renderConfiguracoesMunicipio);
 
-  // Start router
   router.start();
+
+  // Garantir que login seja exibido se não há sessão (fallback)
+  if (!session && !contentEl.querySelector('#login-mun-cpf')) {
+    window.location.hash = '/login';
+    router.resolve();
+  }
 
   // ─── Sidebar Navigation ────────────────────────────
   document.querySelectorAll('.nav-item[data-route]').forEach(item => {
@@ -101,10 +114,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.location.hash = '/login';
   });
 
-  // Initial Check
+  // Initial Check — garantir UI correta ao carregar
+  updateUIForSession();
   if (!getMunSession()) {
     window.location.hash = '/login';
-  } else {
-    updateUIForSession();
   }
 });

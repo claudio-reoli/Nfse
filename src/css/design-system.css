@@ -1,5 +1,5 @@
 /* ============================================================
-   NFS-e Antigravity — Design System
+   NFS-e Freire — Design System
    Premium Enterprise Fiscal Platform
    ============================================================ */
 
@@ -550,9 +550,16 @@ a:hover {
 .stat-change.positive { color: var(--color-accent-400); }
 .stat-change.negative { color: var(--color-danger-400); }
 
+/* ── Table Container (scroll horizontal em telas menores) ───── */
+.table-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ── Data Table ────────────────────────────────────────────── */
 .data-table {
   width: 100%;
+  min-width: 900px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -589,6 +596,26 @@ a:hover {
   font-size: var(--text-xs);
   color: var(--color-primary-400);
 }
+
+/* ── Tabela Notas ADN (colunas com largura adequada) ─────────── */
+.data-table--notas-adn th:nth-child(1),
+.data-table--notas-adn td:nth-child(1) { min-width: 100px; }
+.data-table--notas-adn th:nth-child(2),
+.data-table--notas-adn td:nth-child(2) { min-width: 180px; font-family: var(--font-mono); font-size: 0.8rem; word-break: break-all; }
+.data-table--notas-adn th:nth-child(3),
+.data-table--notas-adn td:nth-child(3) { min-width: 180px; white-space: normal; word-wrap: break-word; }
+.data-table--notas-adn th:nth-child(4),
+.data-table--notas-adn td:nth-child(4) { min-width: 180px; white-space: normal; word-wrap: break-word; }
+.data-table--notas-adn th:nth-child(5),
+.data-table--notas-adn td:nth-child(5) { min-width: 220px; max-width: 320px; white-space: normal; word-wrap: break-word; line-height: 1.35; }
+.data-table--notas-adn th:nth-child(6),
+.data-table--notas-adn td:nth-child(6) { min-width: 90px; white-space: nowrap; }
+.data-table--notas-adn th:nth-child(7),
+.data-table--notas-adn td:nth-child(7) { min-width: 100px; }
+.data-table--notas-adn th:nth-child(8),
+.data-table--notas-adn td:nth-child(8) { min-width: 70px; text-align: center; }
+.data-table--notas-adn th:nth-child(9),
+.data-table--notas-adn td:nth-child(9) { min-width: 140px; }
 
 /* ── Grid Utilities ────────────────────────────────────────── */
 .grid { display: grid; gap: var(--space-4); }

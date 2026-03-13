@@ -1,5 +1,5 @@
 /**
- * NFS-e Antigravity — Main Application
+ * NFS-e Freire — Main Application
  * Entry point and router setup
  */
 import { Router } from './router.js';
@@ -9,13 +9,47 @@ import { renderConsultaNFSe } from './pages/consulta-nfse.js';
 import { renderEventos } from './pages/eventos.js';
 import { renderADN } from './pages/adn.js';
 import { renderConfiguracoes, startCertExpiryWatch } from './pages/configuracoes.js';
+import { renderParametros } from './pages/parametros.js';
 import { renderLogin } from './pages/login.js';
 import { renderGestaoAcessos } from './pages/gestao-acessos.js';
 import { renderXmlAssinado } from './pages/xml-assinado.js';
 import { renderGuiasContribuinte } from './pages/guias-contribuinte.js';
 import { renderMinhasNotas } from './pages/minhas-notas.js';
 import { getSession, logout, isAuthorized, ROLES, AUTH_LEVELS } from './auth.js';
-import { setEnvironment, setDemoMode } from './api-service.js';
+import { setEnvironment, setDemoMode, fetchConfigAmbiente } from './api-service.js';
+import { onConfigSaved } from './config-sync.js';
+
+const AMB_STORAGE_KEY = 'nfse_last_ambiente';
+
+function updateEnvBadge(ambiente) {
+  const badge = document.getElementById('env-badge');
+  if (!badge) return;
+  const amb = ambiente || 'sandbox';
+  badge.textContent = amb === 'production' ? '🔴 Produção' : '⚡ Sandbox';
+  badge.style.background = amb === 'production' ? 'linear-gradient(135deg, #DC2626, #B91C1C)' : '';
+  badge.className = 'header-env-badge' + (amb === 'production' ? ' production' : '');
+  try { localStorage.setItem(AMB_STORAGE_KEY, amb); } catch (_) {}
+}
+
+async function refreshAmbienteFromBackend() {
+  try {
+    const data = await fetchConfigAmbiente();
+    const amb = data?.ambiente || 'sandbox';
+    const urlSefin = data?.urlSefin || (amb === 'production' ? 'sefin.nfse.gov.br' : 'sefin.producaorestrita.nfse.gov.br');
+    const urlAdn = data?.urlAdn || (amb === 'production' ? 'adn.nfse.gov.br' : 'adn.producaorestrita.nfse.gov.br');
+    setEnvironment(amb);
+    updateEnvBadge(amb);
+    const cfgBadge = document.getElementById('cfg-amb-badge');
+    const sefinEl = document.getElementById('cfg-url-sefin-display');
+    const adnEl = document.getElementById('cfg-url-adn-display');
+    if (cfgBadge) {
+      cfgBadge.textContent = amb === 'production' ? '🔴 Produção' : '⚡ Sandbox';
+      cfgBadge.className = 'badge ' + (amb === 'production' ? 'badge-danger' : 'badge-warning');
+    }
+    if (sefinEl) sefinEl.value = urlSefin;
+    if (adnEl) adnEl.value = urlAdn;
+  } catch (_) {}
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   if (!getSession() && window.location.hash !== '#/login') {
@@ -25,24 +59,32 @@ document.addEventListener('DOMContentLoaded', () => {
   const contentEl = document.getElementById('main-content');
   if (!contentEl) return;
 
-  // Load initial API settings
+  // Ambiente: fonte única no backend (módulo Município). Badge e proxy usam essa config.
+  const lastAmb = localStorage.getItem(AMB_STORAGE_KEY) || 'sandbox';
+  setEnvironment(lastAmb);
+  updateEnvBadge(lastAmb);
+  refreshAmbienteFromBackend().catch(() => {
+    setEnvironment('sandbox');
+    updateEnvBadge('sandbox');
+  });
+
+  // Demo mode: mantido em localStorage (preferência local)
   try {
     const settingsStr = localStorage.getItem('nfse_settings');
     if (settingsStr) {
       const settings = JSON.parse(settingsStr);
-      setEnvironment(settings.ambiente || 'sandbox');
       setDemoMode(!!settings.demoMode);
     } else {
-      setEnvironment('sandbox');
       setDemoMode(false);
     }
   } catch (e) {
-    setEnvironment('sandbox');
     setDemoMode(false);
   }
 
   // ─── Router Setup ────────────────────────────
-  const router = new Router(contentEl);
+  const router = new Router(contentEl, {
+    onRouteChange: () => { if (getSession()) refreshAmbienteFromBackend(); }
+  });
   router
     .register('/login', renderLogin)
     .register('/dashboard', renderDashboard)
@@ -83,53 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
     })
-    .register('/parametros', (c) => {
-      c.innerHTML = `
-        <div class="page-header animate-slide-up">
-          <div>
-            <h1 class="page-title">Parâmetros Municipais</h1>
-            <p class="page-description">Consulta de alíquotas, regimes especiais e benefícios municipais via API</p>
-          </div>
-        </div>
-        <div class="card animate-slide-up">
-          <div class="card-body">
-            <div class="form-row mb-4">
-              <div class="form-group">
-                <label class="form-label">Código do Município (IBGE)</label>
-                <input class="form-input form-input-mono" id="param-codMun" type="text" maxlength="7" placeholder="3550308">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Código do Serviço</label>
-                <input class="form-input form-input-mono" id="param-codServ" type="text" placeholder="1.05">
-              </div>
-              <div class="form-group" style="align-self: flex-end;">
-                <button class="btn btn-primary" onclick="import('./toast.js').then(m => m.toast.info('GET /parametros_municipais/{codMun}/{codServico}'))">
-                  🔍 Consultar Parâmetros
-                </button>
-              </div>
-            </div>
-
-            <div class="grid grid-3 gap-4 mt-6">
-              <div style="padding: var(--space-4); background: var(--surface-glass); border-radius: var(--radius-lg); border: 1px solid var(--surface-glass-border);">
-                <div style="font-size: var(--text-xs); text-transform: uppercase; color: var(--color-neutral-500); margin-bottom: var(--space-2);">Convênio</div>
-                <div style="font-weight: 600; color: var(--color-accent-400);">Ativo</div>
-                <div style="font-size: var(--text-xs); color: var(--color-neutral-600); margin-top: var(--space-1);">GET /parametros_municipais/{cod}/convenio</div>
-              </div>
-              <div style="padding: var(--space-4); background: var(--surface-glass); border-radius: var(--radius-lg); border: 1px solid var(--surface-glass-border);">
-                <div style="font-size: var(--text-xs); text-transform: uppercase; color: var(--color-neutral-500); margin-bottom: var(--space-2);">Alíquota ISSQN</div>
-                <div style="font-weight: 600; color: var(--color-primary-400);">5,00%</div>
-                <div style="font-size: var(--text-xs); color: var(--color-neutral-600); margin-top: var(--space-1);">GET /parametros_municipais/{cod}/aliquotas</div>
-              </div>
-              <div style="padding: var(--space-4); background: var(--surface-glass); border-radius: var(--radius-lg); border: 1px solid var(--surface-glass-border);">
-                <div style="font-size: var(--text-xs); text-transform: uppercase; color: var(--color-neutral-500); margin-bottom: var(--space-2);">Regimes Especiais</div>
-                <div style="font-weight: 600; color: var(--color-warning-400);">2 ativos</div>
-                <div style="font-size: var(--text-xs); color: var(--color-neutral-600); margin-top: var(--space-1);">GET /parametros_municipais/{cod}/regimes_especiais</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-    })
+    .register('/parametros', renderParametros)
     .register('/configuracoes', renderConfiguracoes);
 
   // Start router
@@ -162,7 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ─── Authentication Flow Control ─────────────────────
   
-  function updateUIForSession() {
+  async function updateUIForSession() {
     const session = getSession();
     const shell = document.getElementById('app-shell');
     const sidebar = document.getElementById('sidebar');
@@ -181,7 +177,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if(roleEl) roleEl.textContent = session.role;
       if(avatarEl) avatarEl.textContent = session.name.substring(0, 2).toUpperCase();
 
-      if (session.role === ROLES.FATURISTA) {
+      await refreshAmbienteFromBackend().catch(() => updateEnvBadge('sandbox'));
+
+      if (['FATURISTA', ROLES.FATURISTA].includes(session.role)) {
         document.getElementById('nav-configuracoes')?.style.setProperty('display', 'none');
         document.getElementById('nav-gestao-acessos')?.style.setProperty('display', 'none');
       } else {
@@ -223,4 +221,19 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     updateUIForSession();
   }
+
+  window.addEventListener('nfse_ambiente_loaded', (e) => {
+    const amb = e.detail?.ambiente;
+    if (amb) updateEnvBadge(amb);
+  });
+
+  onConfigSaved(() => refreshAmbienteFromBackend());
+
+  // Atualizar quando a aba volta ao foco (ex.: usuário salvou no município e voltou)
+  let _visibilityDebounce = null;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    clearTimeout(_visibilityDebounce);
+    _visibilityDebounce = setTimeout(() => refreshAmbienteFromBackend(), 300);
+  });
 });
