@@ -588,14 +588,35 @@ export function renderConfiguracoes(container) {
 
   // ─── Salvar Geral ─────────────────────────────
   document.getElementById('cfg-salvar')?.addEventListener('click', () => {
-    // Salva tudo
     const val = (id) => document.getElementById(id)?.value?.trim() || '';
     const settings = loadSettings();
 
-    // Certificado tipo
-    settings.cert.tipo = document.getElementById('cfg-cert-tipo')?.value || 'A1';
+    // Contribuinte
+    settings.contribuinte = settings.contribuinte || {};
+    settings.contribuinte.cnpj = val('cfg-cnpj').replace(/\D/g, '') || settings.contribuinte.cnpj || '';
+    settings.contribuinte.razaoSocial = val('cfg-razao-social') || settings.contribuinte.razaoSocial || '';
+    settings.contribuinte.inscricaoMunicipal = val('cfg-inscricao-municipal') || settings.contribuinte.inscricaoMunicipal || '';
+    settings.contribuinte.uf = val('cfg-uf') || settings.contribuinte.uf || '';
+    settings.contribuinte.codMun = val('cfg-codmun') || settings.contribuinte.codMun || '';
+    settings.contribuinte.email = val('cfg-email') || settings.contribuinte.email || '';
+    settings.contribuinte.telefone = val('cfg-telefone') || settings.contribuinte.telefone || '';
+
+    // Regime tributário
+    settings.regimeTrib = settings.regimeTrib || {};
+    settings.regimeTrib.opSimpNac = val('cfg-op-simp-nac') || settings.regimeTrib.opSimpNac || '1';
+    settings.regimeTrib.regEspTrib = val('cfg-reg-esp-trib') || settings.regimeTrib.regEspTrib || '0';
+
+    // Certificado
+    settings.cert = settings.cert || {};
+    settings.cert.tipo = val('cfg-cert-tipo') || settings.cert.tipo || 'A1';
+
+    // Demo mode e email
+    settings.demoMode = document.getElementById('cfg-demo')?.value === 'true';
+    settings.emailNotificacoes = val('cfg-email-notif') || settings.emailNotificacoes || '';
 
     saveSettings(settings);
+    setDemoMode(settings.demoMode);
+
     toast.success('✅ Todas as configurações foram salvas!');
   });
 

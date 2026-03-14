@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import cron from 'node-cron';
 import axios from 'axios';
 import https from 'https';
 import path from 'path';
@@ -885,7 +884,9 @@ async function gerarApuracaoMensal(competenciaDesejada) {
     const vServ = nota.valores?.vServ ?? nota.valorServico ?? 0;
     const pAliq = nota.tributos?.issqn?.pAliq ?? nota.aliquota ?? 0;
     const retido = nota.tributos?.issqn?.tpRetISSQN === '2' || nota.tributos?.issqn?.tpRetISSQN === '3' || nota.issRetidoFonte === true;
-    const impostoDaNota = vServ * pAliq;
+    // pAliq pode estar em decimal (0.05) ou percentual inteiro (5) — normalizar para decimal
+    const pAliqDecimal = (pAliq && pAliq > 1) ? pAliq / 100 : (pAliq || 0);
+    const impostoDaNota = vServ * pAliqDecimal;
     let cnpjDevedor = retido
       ? (nota.tomador?.CNPJ || nota.tomador?.cnpj || '')
       : (nota.prestador?.CNPJ || nota.prestador?.cnpj || '');
@@ -1106,7 +1107,7 @@ app.get('/api/config/ambiente', async (req, res) => {
 // ROTAS: Dashboard Stats
 // ==========================================
 
-app.get('/api/dashboard/stats', async (req, res) => {
+app.get('/api/dashboard/stats', authenticate, async (req, res) => {
   const cnpj = req.query.cnpj;
   const notas = await db.getNotas(cnpj ? { cnpj: cnpj.replace(/\D/g, '') } : {});
 
@@ -1183,7 +1184,7 @@ app.get('/api/health', async (req, res) => {
 // ROTAS: Gestão de Usuários (CRUD)
 // ==========================================
 
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', authenticate, async (req, res) => {
   const filter = req.query.type ? { userType: req.query.type } : {};
   const users = await db.getUsers(filter);
 
@@ -1200,7 +1201,7 @@ app.get('/api/users', async (req, res) => {
   })));
 });
 
-app.post('/api/users', rateLimit(60000, 20), async (req, res) => {
+app.post('/api/users', authenticate, rateLimit(60000, 20), async (req, res) => {
   const { cpf, name, email, celular, role, password, authLevel, cnpjVinculado, userType } = req.body;
 
   if (!cpf || !name || !role) {
@@ -1233,7 +1234,7 @@ app.post('/api/users', rateLimit(60000, 20), async (req, res) => {
   res.status(201).json({ sucesso: true });
 });
 
-app.put('/api/users/:cpf', async (req, res) => {
+app.put('/api/users/:cpf', authenticate, async (req, res) => {
   const existing = await db.getUserByCpf(req.params.cpf);
   if (!existing) return res.status(404).json({ error: 'Usuário não encontrado' });
 
@@ -1250,7 +1251,7 @@ app.put('/api/users/:cpf', async (req, res) => {
   res.json({ sucesso: true });
 });
 
-app.delete('/api/users/:cpf', async (req, res) => {
+app.delete('/api/users/:cpf', authenticate, async (req, res) => {
   const existing = await db.getUserByCpf(req.params.cpf);
   if (!existing) return res.status(404).json({ error: 'Usuário não encontrado' });
   await db.deleteUser(req.params.cpf);
@@ -1261,7 +1262,7 @@ app.delete('/api/users/:cpf', async (req, res) => {
 // ROTAS: Município — Notas Importadas
 // ==========================================
 
-app.get('/api/municipio/notas', async (req, res) => {
+app.get('/api/municipio/notas', authenticate, async (req, res) => {
   const notas = await db.getNotas();
   res.json({ sucesso: true, notas });
 });
@@ -1270,12 +1271,12 @@ app.get('/api/municipio/notas', async (req, res) => {
 // ROTAS: Município — Apurações e Guias
 // ==========================================
 
-app.get('/api/municipio/apuracoes/:cnpj', async (req, res) => {
+app.get('/api/municipio/apuracoes/:cnpj', authenticate, async (req, res) => {
   const apuracoes = await db.getApuracoesByCnpj(req.params.cnpj);
   res.json({ sucesso: true, apuracoes });
 });
 
-app.post('/api/municipio/gerar-guia/:id', async (req, res) => {
+app.post('/api/municipio/gerar-guia/:id', authenticate, async (req, res) => {
   const apu = await db.getApuracaoById(req.params.id);
   if (!apu) return res.status(404).json({ error: 'Apuração não encontrada' });
 
@@ -1296,7 +1297,7 @@ app.post('/api/municipio/gerar-guia/:id', async (req, res) => {
   res.json({ sucesso: true, guia });
 });
 
-app.post('/api/municipio/pagar-guia/:id', async (req, res) => {
+app.post('/api/municipio/pagar-guia/:id', authenticate, async (req, res) => {
   const apu = await db.getApuracaoById(req.params.id);
   if (!apu) return res.status(404).json({ error: 'Apuração não encontrada' });
 
@@ -1375,7 +1376,7 @@ app.post('/api/municipio/decisao-judicial', authenticate, async (req, res) => {
 // ROTAS: Contribuinte — Minhas Notas
 // ==========================================
 
-app.get('/api/notes', async (req, res) => {
+app.get('/api/notes', authenticate, async (req, res) => {
   const cnpj = req.query.cnpj;
   if (!cnpj) return res.json([]);
 
@@ -1453,12 +1454,12 @@ app.get('/api/nfse/:chave', authenticate, async (req, res) => {
 // ROTAS: Configurações do Município
 // ==========================================
 
-app.get('/api/municipio/config', async (req, res) => {
+app.get('/api/municipio/config', authenticate, async (req, res) => {
   const config = await db.getConfig();
   res.json(config || {});
 });
 
-app.put('/api/municipio/config', async (req, res) => {
+app.put('/api/municipio/config', authenticate, async (req, res) => {
   const allowed = [
     'ibge', 'nome', 'uf', 'cnpj', 'inscEstadual', 'endereco', 'email', 'telefone', 'ambiente',
     'urlAdnMun',
@@ -1532,7 +1533,7 @@ function convertPfxToPem(pfxBuffer, passphrase) {
   } catch (_) { /* db ainda não existe na primeira inicialização */ }
 })();
 
-app.post('/api/municipio/upload-cert', express.raw({ type: 'application/octet-stream', limit: '5mb' }), async (req, res) => {
+app.post('/api/municipio/upload-cert', authenticate, express.raw({ type: 'application/octet-stream', limit: '5mb' }), async (req, res) => {
   try {
     const passphrase = req.headers['x-cert-passphrase'] || '';
     if (!req.body || req.body.length === 0) {
@@ -1594,7 +1595,7 @@ function loadMunCertAgent() {
 // ROTAS: Admin — Ações Forçadas
 // ==========================================
 
-app.post('/api/admin/force-sync', async (req, res) => {
+app.post('/api/admin/force-sync', authenticate, async (req, res) => {
   try {
     const result = await syncNfsFromAdn();
     res.json({ sucesso: true, ...result });
@@ -1605,7 +1606,7 @@ app.post('/api/admin/force-sync', async (req, res) => {
 });
 
 // Diagnóstico ADN — testa cada URL e retorna status detalhado (usa certificado armazenado)
-app.get('/api/admin/probe-adn', async (req, res) => {
+app.get('/api/admin/probe-adn', authenticate, async (req, res) => {
   try {
     const config = await db.getConfig();
     const ambiente = config.ambiente || 'sandbox';
@@ -1666,7 +1667,7 @@ app.get('/api/admin/probe-adn', async (req, res) => {
 });
 
 // Simulação ADN — importa notas sintéticas para teste quando ADN real não está disponível
-app.post('/api/admin/simular-importacao', async (req, res) => {
+app.post('/api/admin/simular-importacao', authenticate, async (req, res) => {
   try {
     const config = await db.getConfig();
     const IBGE_MUNICIPIO = config.ibge || '0000000';
@@ -1748,10 +1749,76 @@ app.post('/api/admin/simular-importacao', async (req, res) => {
   }
 });
 
-app.post('/api/admin/force-apuracao', async (req, res) => {
+app.post('/api/admin/force-apuracao', authenticate, async (req, res) => {
   const comp = req.body.competencia || '2026-03';
   const resultados = await gerarApuracaoMensal(comp);
   res.json({ sucesso: true, qdtGuias: resultados.length, resultados });
+});
+
+// ─── Contribuinte Regime ───────────────────────────────────────
+app.get('/api/municipio/contribuinte-regime', authenticate, async (req, res) => {
+  try {
+    const r = await db.pool.query('SELECT * FROM contribuinte_regime ORDER BY atualizado_em DESC');
+    res.json({ sucesso: true, regimes: r.rows });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+app.put('/api/municipio/contribuinte-regime/:cnpj', authenticate, async (req, res) => {
+  try {
+    const { cnpj } = req.params;
+    const { regime = 'normal', isento_guia = false } = req.body;
+    await db.pool.query(
+      `INSERT INTO contribuinte_regime (cnpj, regime, isento_guia, atualizado_em)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (cnpj) DO UPDATE SET regime = $2, isento_guia = $3, atualizado_em = NOW()`,
+      [cnpj.replace(/\D/g, ''), regime, isento_guia]
+    );
+    res.json({ sucesso: true });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+app.delete('/api/municipio/contribuinte-regime/:cnpj', authenticate, async (req, res) => {
+  try {
+    await db.pool.query('DELETE FROM contribuinte_regime WHERE cnpj = $1', [req.params.cnpj.replace(/\D/g, '')]);
+    res.json({ sucesso: true });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ─── Parâmetros Municipais (proxy para Sefin) ─────────────────
+app.get('/api/parametros-municipais/:codMun', authenticate, async (req, res) => {
+  try {
+    const config = await db.getConfig();
+    const ambiente = config.ambiente || 'sandbox';
+    const AMBIENTES = { sandbox: { sefin: 'https://sefin.producaorestrita.nfse.gov.br' }, production: { sefin: 'https://sefin.nfse.gov.br' } };
+    const sefinBase = (config.urlSefin || process.env.SEFIN_URL || AMBIENTES[ambiente]?.sefin)?.trim();
+    const agent = loadMunCertAgent();
+    const { codMun } = req.params;
+
+    const endpoints = {
+      convenio: `${sefinBase}/parametros_municipais/${codMun}/convenio`,
+      aliquotas: `${sefinBase}/parametros_municipais/${codMun}/aliquotas`,
+      regimesEspeciais: `${sefinBase}/parametros_municipais/${codMun}/regimes_especiais`,
+    };
+
+    const results = {};
+    for (const [key, url] of Object.entries(endpoints)) {
+      try {
+        const r = await axios.get(url, { httpsAgent: agent, timeout: 10000, validateStatus: () => true });
+        results[key] = { status: r.status, data: r.data };
+      } catch (e) {
+        results[key] = { status: null, erro: e.message };
+      }
+    }
+    res.json({ sucesso: true, codMun, results });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
 });
 
 // ==========================================

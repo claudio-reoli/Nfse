@@ -126,6 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
     })
     .register('/parametros', renderParametros)
+    .register('/xml-assinado', renderXmlAssinado)
     .register('/configuracoes', renderConfiguracoes);
 
   // Start router

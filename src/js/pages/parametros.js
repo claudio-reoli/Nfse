@@ -3,6 +3,8 @@
  */
 import { toast } from '../toast.js';
 import { buscarMunicipiosPorUF, formatMunicipioDisplaySync } from '../municipios-ibge.js';
+import { getSession } from '../auth.js';
+import { getBackendUrl } from '../api-service.js';
 
 export function renderParametros(container) {
   container.innerHTML = `
@@ -86,9 +88,62 @@ export function renderParametros(container) {
     hiddenEl.value = opt ? (opt.dataset.code || '') : displayEl.value.replace(/\D/g, '').slice(0, 7);
   });
 
-  document.getElementById('btn-param-consultar')?.addEventListener('click', () => {
+  document.getElementById('btn-param-consultar')?.addEventListener('click', async () => {
     const cod = hiddenEl?.value || displayEl?.value?.replace(/\D/g, '').slice(0, 7);
-    const codServ = document.getElementById('param-codServ')?.value;
-    toast.info(`GET /parametros_municipais/${cod || '{codMun}'}/${codServ || '{codServico}'}`);
+    const codServico = document.getElementById('param-codServ')?.value?.trim();
+
+    if (!cod || cod.length !== 7) {
+      toast.warning('Selecione um município válido (IBGE 7 dígitos).');
+      return;
+    }
+
+    const btn = document.getElementById('btn-param-consultar');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Consultando...'; }
+
+    try {
+      const session = getSession();
+      const res = await fetch(`${getBackendUrl()}/parametros-municipais/${cod}?codServico=${codServico || ''}`, {
+        headers: { 'Authorization': `Bearer ${session?.token || ''}` }
+      });
+      const data = await res.json();
+
+      if (!data.sucesso) throw new Error(data.erro || 'Erro na consulta');
+
+      const cards = document.querySelectorAll('.grid.grid-3 > div');
+      if (cards[0]) {
+        const convenio = data.results?.convenio;
+        const convStatus = convenio?.status === 200 ? 'Ativo' : (convenio?.status ? `HTTP ${convenio.status}` : 'Indisponível');
+        cards[0].querySelector('[style*="font-weight"]').textContent = convStatus;
+      }
+      if (cards[1]) {
+        const aliq = data.results?.aliquotas;
+        let aliqDisplay = 'Não encontrado';
+        if (aliq?.status === 200 && aliq.data) {
+          const v = aliq.data;
+          const pct = v.pAliq || v.aliquota || v.aliq || (Array.isArray(v) ? v[0]?.pAliq : null);
+          aliqDisplay = pct ? `${parseFloat(pct).toFixed(2).replace('.', ',')}%` : JSON.stringify(v).substring(0, 30);
+        } else if (aliq?.status) {
+          aliqDisplay = `HTTP ${aliq.status}`;
+        }
+        cards[1].querySelector('[style*="font-weight"]').textContent = aliqDisplay;
+      }
+      if (cards[2]) {
+        const reg = data.results?.regimesEspeciais;
+        let regDisplay = 'Não encontrado';
+        if (reg?.status === 200 && reg.data) {
+          const v = reg.data;
+          regDisplay = Array.isArray(v) ? `${v.length} ativos` : (v.qtd || 'Consultado');
+        } else if (reg?.status) {
+          regDisplay = `HTTP ${reg.status}`;
+        }
+        cards[2].querySelector('[style*="font-weight"]').textContent = regDisplay;
+      }
+
+      toast.success(`Parâmetros consultados para o município ${cod}!`);
+    } catch (err) {
+      toast.error(`Falha: ${err.message}`);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🔍 Consultar Parâmetros'; }
+    }
   });
 }

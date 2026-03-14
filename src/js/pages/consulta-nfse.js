@@ -8,7 +8,47 @@ import { formatMunicipioDisplaySync, formatEstrangeiroDisplay } from '../municip
 import { safeFetch, consultarNFSe, consultarNFSeLocal, consultarDPS } from '../api-service.js';
 import { openDANFSe } from '../danfse-generator.js';
 
+function mapNFSeToDANFSe(nfse) {
+  if (!nfse) return null;
+  const prest = nfse.emit || nfse.prestador || nfse.infDPS?.prest || {};
+  const toma = nfse.toma || nfse.tomador || nfse.infDPS?.toma || {};
+  const serv = nfse.serv || nfse.servico || nfse.infDPS?.serv || {};
+  const val = nfse.valores || nfse.infDPS?.valores || {};
+  const fmt = (v) => `R$ ${parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  return {
+    nNFSe: nfse.nNFSe || '—',
+    chaveAcesso: nfse.chaveAcesso || document.getElementById('result-chave')?.textContent || '—',
+    dhProc: nfse.dhProc || nfse.dhEmi || '—',
+    tpAmb: nfse.ambGer || nfse.tpAmb || '2',
+    dCompet: nfse.dCompet || nfse.dEmi || '—',
+    prest: { doc: prest.CNPJ || prest.CPF || '—', xNome: prest.xNome || '—', IM: prest.IM || '' },
+    toma: { doc: toma.CNPJ || toma.CPF || '—', xNome: toma.xNome || '—', IM: toma.IM || '' },
+    serv: {
+      cTribNac: serv.cServ?.cTribNac || serv.cTribNac || '—',
+      xDescServ: serv.xDescServ || '—',
+      localPrest: String(serv.cLocPrest || nfse.cLocIncid || '').padStart(7, '0'),
+    },
+    valores: {
+      vServ: fmt(val.vServ),
+      vBC: fmt(val.vBC),
+      pAliq: `${(val.pAliq || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      vISSQN: fmt(val.vISSQN || val.vISS),
+      vLiq: fmt(val.vLiq),
+    },
+    ibscbs: {
+      vBC: fmt(0), pAliqEfetUF: '0,10', vIBSUF: fmt(0),
+      pAliqEfetMun: '0,05', vIBSMun: fmt(0),
+      pAliqEfetCBS: '0,90', vCBS: fmt(0),
+      vIBSTot: fmt(0), vTotNF: fmt(val.vLiq || val.vServ),
+    },
+  };
+}
+
 export function renderConsultaNFSe(container) {
+  let currentNFSe = null;
+  let currentXML = null;
+  let currentChave = null;
+
   container.innerHTML = `
     <div class="page-header animate-slide-up">
       <div>
@@ -215,6 +255,9 @@ export function renderConsultaNFSe(container) {
       }
       if (response.ok) {
         const nfse = response.data.infNFSe || response.data;
+        currentNFSe = nfse;
+        currentXML = response.data.xml || response.data.xmlOriginal || null;
+        currentChave = chave;
         document.getElementById('result-chave').textContent = chave;
         document.getElementById('result-nNFSe').textContent = nfse.nNFSe || 'N/A';
         
@@ -339,11 +382,22 @@ export function renderConsultaNFSe(container) {
   // Action buttons
   document.getElementById('btn-danfse')?.addEventListener('click', () => {
     toast.info('Gerando DANFSe...');
-    openDANFSe();
+    openDANFSe(currentNFSe ? mapNFSeToDANFSe(currentNFSe) : null);
     toast.success('DANFSe aberto em nova janela para impressão/PDF!');
   });
   document.getElementById('btn-xml')?.addEventListener('click', () => {
-    toast.info('Download XML: em produção, conecta ao ADN para baixar o XML original da NFS-e.');
+    if (!currentXML) {
+      toast.warning('XML não disponível para esta consulta.');
+      return;
+    }
+    const blob = new Blob([currentXML], { type: 'application/xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `NFSe_${currentChave || 'download'}.xml`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Download do XML iniciado!');
   });
   document.getElementById('btn-eventos')?.addEventListener('click', () => {
     toast.info('Consultando eventos: GET /nfse/{chaveAcesso}/eventos');

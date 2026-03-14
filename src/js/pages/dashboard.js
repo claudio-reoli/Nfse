@@ -110,11 +110,24 @@ export async function renderDashboard(container) {
     const healthResp = await getHealthStatus();
     const health = healthResp.data;
     const panel = document.getElementById('system-health-panel');
+    const sefinStatus = health.services?.sefin?.status;
+    const adnStatus = health.services?.adn?.status;
+    const sefinLatency = health.services?.sefin?.latency;
+    const adnLatency = health.services?.adn?.latency;
     panel.innerHTML = `
       <div style="display: flex; flex-direction: column; gap: 10px;">
-        <div style="display: flex; justify-content: space-between;"><span>Sefin Nacional</span> <span class="status-dot ${health.services.sefin.status === 'online' ? 'online' : 'offline'}"></span></div>
-        <div style="display: flex; justify-content: space-between;"><span>ADN Nacional</span> <span class="status-dot ${health.services.adn.status === 'online' ? 'online' : 'offline'}"></span></div>
-        <div style="display: flex; justify-content: space-between;"><span>Backend Local</span> <span class="status-dot online"></span></div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Sefin Nacional${sefinLatency != null ? ` <small style="color:var(--color-neutral-500)">(${sefinLatency}ms)</small>` : ''}</span>
+          <span class="status-dot ${sefinStatus === 'online' ? 'online' : 'offline'}"></span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span>ADN Nacional${adnLatency != null ? ` <small style="color:var(--color-neutral-500)">(${adnLatency}ms)</small>` : ''}</span>
+          <span class="status-dot ${adnStatus === 'online' ? 'online' : 'offline'}"></span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Backend Local</span>
+          <span class="status-dot online"></span>
+        </div>
       </div>
     `;
   } catch(e) { document.getElementById('system-health-panel').innerHTML = '⚠️ Erro ao verificar disponibilidade.'; }

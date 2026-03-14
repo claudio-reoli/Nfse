@@ -59,7 +59,7 @@ export function renderGuiasContribuinte(container) {
         </div>
         <div class="card-body">
           <p style="color: var(--color-neutral-400); font-size: 0.9rem;">Escaneie o QR Code abaixo para pagar via PIX.</p>
-          <div style="background: white; padding: 20px; border-radius: 8px; display: inline-block; margin: 20px 0;"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=freire" alt="QR Code"></div>
+          <div style="background: white; padding: 20px; border-radius: 8px; display: inline-block; margin: 20px 0;"><img id="qrcode-pix-img" src="" alt="QR Code" style="width:200px;height:200px;"></div>
           <div style="margin-bottom: 20px;"><strong style="font-size: 1.5rem;" id="modal-pix-valor">R$ 0,00</strong></div>
                     <input type="text" class="form-input text-mono" id="pix-payload" readonly value="..." style="text-align: center; font-size: 0.8rem; margin-bottom: 10px;">
           <button class="btn btn-secondary w-full" id="btn-copiar-pix" style="margin-bottom: 10px;">📋 Copiar Código PIX</button>
@@ -73,7 +73,10 @@ export function renderGuiasContribuinte(container) {
 
   async function loadGuias() {
     try {
-      const resp = await fetch(`${getBackendUrl()}/municipio/apuracoes/${cnpjContribuinte}`);
+      const resp = await fetch(`${getBackendUrl()}/municipio/apuracoes/${cnpjContribuinte}`, {
+        headers: { 'Authorization': `Bearer ${session?.token || ''}` }
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       const tbody = document.getElementById('tabela-guias-contribuinte').querySelector('tbody');
       tbody.innerHTML = '';
@@ -106,6 +109,10 @@ export function renderGuiasContribuinte(container) {
              lastGuideId = ds.id;
              document.getElementById('modal-pix-valor').textContent = formataBRL(ds.valor);
              document.getElementById('pix-payload').value = ds.payload;
+             // Gerar QR code real com o payload PIX
+             const payload = ds.payload || 'PIX-PAYLOAD-INVALIDO';
+             const qrImg = document.getElementById('qrcode-pix-img');
+             if (qrImg) qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payload)}`;
              document.getElementById('modal-pix').style.display = 'flex';
          });
       });
@@ -115,14 +122,17 @@ export function renderGuiasContribuinte(container) {
   }
 
   document.getElementById('btn-atualizar-guias')?.addEventListener('click', loadGuias);
-  document.getElementById('fechar-modal-pix').addEventListener('click', () => document.getElementById('modal-pix').style.display = 'none');
+  document.getElementById('fechar-modal-pix')?.addEventListener('click', () => document.getElementById('modal-pix').style.display = 'none');
   document.getElementById('btn-copiar-pix').addEventListener('click', () => {
       navigator.clipboard.writeText(document.getElementById('pix-payload').value);
       toast.success('PIX copiado.');
   });
   document.getElementById('btn-simular-pagamento').addEventListener('click', async () => {
       try {
-          const res = await fetch(`${getBackendUrl()}/municipio/pagar-guia/${lastGuideId}`, { method: 'POST' });
+          const res = await fetch(`${getBackendUrl()}/municipio/pagar-guia/${lastGuideId}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${session?.token || ''}` }
+          });
           if ((await res.json()).sucesso) {
               toast.success('Pagamento liquidado!');
               document.getElementById('modal-pix').style.display = 'none';

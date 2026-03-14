@@ -213,7 +213,19 @@ export async function insertNota(nota) {
   const tom = nota.tomador || {};
   const val = nota.valores || {};
   const dCompet = dg.dCompet || nota.competencia || '';
-  const dCompetDate = dCompet ? (dCompet.length >= 10 ? dCompet.substring(0, 10) : null) : null;
+  // Suporta formatos: YYYY-MM-DD, YYYY-MM-DDTHH... (tira os 10 primeiros)
+  //                   YYYY-MM (7 chars → adiciona -01 para data válida)
+  //                   YYYYMM  (6 chars → interpreta como YYYY-MM-01)
+  let dCompetDate = null;
+  if (dCompet) {
+    if (dCompet.length >= 10) {
+      dCompetDate = dCompet.substring(0, 10);
+    } else if (dCompet.length === 7 && dCompet.includes('-')) {
+      dCompetDate = dCompet + '-01';
+    } else if (dCompet.length === 6 && /^\d{6}$/.test(dCompet)) {
+      dCompetDate = `${dCompet.substring(0, 4)}-${dCompet.substring(4, 6)}-01`;
+    }
+  }
 
   await pool.query(
     `INSERT INTO notas (

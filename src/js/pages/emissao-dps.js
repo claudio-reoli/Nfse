@@ -1349,6 +1349,9 @@ function setupFormActions() {
           if (response.ok) {
             toast.success(`✅ NFS-e autorizada! Nº ${response.data.nfse?.nNFSe || 'N/A'} — cStat: ${response.data.cStat}`);
 
+            // Save XML to localStorage for /xml-assinado page
+            try { localStorage.setItem('nfse_last_signed_xml', xmlStr); } catch (_) {}
+
             // Show XML preview and API response
             generateAndShowXml();
             const apiResponseEl = document.getElementById('api-response');
@@ -1382,9 +1385,15 @@ function setupFormActions() {
   const clearBtn = document.getElementById('btn-limpar-dps');
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
-      document.querySelectorAll('.form-input, .form-textarea').forEach(el => {
+      document.querySelectorAll('.form-input, .form-textarea, .form-select').forEach(el => {
         if (el.type !== 'hidden') el.value = '';
       });
+      // Pre-fill substituição from sessionStorage if present
+      const substChave = sessionStorage.getItem('nfse_subst_chave');
+      if (substChave) {
+        const chaveEl = document.getElementById('dps-chSubstda');
+        if (chaveEl) chaveEl.value = substChave;
+      }
       toast.info('Formulário limpo.');
     });
   }
@@ -1397,7 +1406,22 @@ function setupFormActions() {
   }
   const dCompet = document.getElementById('dps-dCompet');
   if (dCompet) {
-    dCompet.value = new Date().toISOString().slice(0, 10);
+    // dCompet é TCompet = YYYYMM — se o input for type="month", precisa de YYYY-MM
+    const now = new Date();
+    dCompet.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  // ─── Pré-preencher chave de substituição (vindo de eventos.js) ──
+  const substChave = sessionStorage.getItem('nfse_subst_chave');
+  if (substChave) {
+    const chSubstdaEl = document.getElementById('dps-chSubstda');
+    if (chSubstdaEl) {
+      chSubstdaEl.value = substChave;
+      toast.info('Chave da NFS-e a ser substituída pré-preenchida.');
+    }
+    sessionStorage.removeItem('nfse_subst_chave');
+    sessionStorage.removeItem('nfse_subst_motivo');
+    sessionStorage.removeItem('nfse_subst_xMotivo');
   }
 }
 

@@ -60,7 +60,7 @@ export function buildDPSXml(formData) {
   infDPS.appendChild(el(doc, 'verAplic', formData.verAplic || 'Freire-1.0'));
   infDPS.appendChild(el(doc, 'serie', String(formData.serie).padStart(5, '0')));
   infDPS.appendChild(el(doc, 'nDPS', String(formData.nDPS).padStart(15, '0')));
-  infDPS.appendChild(el(doc, 'dCompet', formatDate(formData.dCompet)));
+  infDPS.appendChild(el(doc, 'dCompet', formatCompetencia(formData.dCompet)));
   infDPS.appendChild(el(doc, 'tpEmit', formData.tpEmit));
 
   addIf(infDPS, doc, 'cMotivoEmisTI', formData.cMotivoEmisTI);
@@ -170,11 +170,11 @@ export function buildDPSXml(formData) {
 
   // ─── Serviço ────────────────────────────────
   const serv = el(doc, 'serv');
-  addIf(serv, doc, 'cServ', el(doc, 'cTribNac', formData.cTribNac));
-  // rebuild with correct structure
-  serv.appendChild(el(doc, 'cTribNac', formData.cTribNac));
-  addIf(serv, doc, 'cTribMun', formData.cTribMun);
-  addIf(serv, doc, 'cNBS', formData.cNBS);
+  const cServ = el(doc, 'cServ');
+  cServ.appendChild(el(doc, 'cTribNac', formData.cTribNac));
+  addIf(cServ, doc, 'cTribMun', formData.cTribMun);
+  addIf(cServ, doc, 'cNBS', formData.cNBS);
+  serv.appendChild(cServ);
   serv.appendChild(el(doc, 'xDescServ', formData.xDescServ));
   serv.appendChild(el(doc, 'cLocPrest', String(formData.cLocPrest).padStart(7, '0')));
 
@@ -474,6 +474,11 @@ export function collectDPSFormData() {
     bmQtd: val('bm-qtd'),
     // Valores
     vServ: val('val-vServ'),
+    pAliq: val('val-pAliq'),
+    tribISSQN: val('val-tribISSQN'),
+    vINSS: val('val-vINSS'),
+    vIR: val('val-vIR'),
+    vCSLL: val('val-vCSLL'),
     descIncond: val('val-descIncond'),
     descCond: val('val-descCond'),
     CSTPC: val('val-CSTPC'),
@@ -650,6 +655,12 @@ function formatDhEmi(dateTimeLocal) {
 function formatDate(dateStr) {
   if (!dateStr) return '';
   return dateStr.replace(/-/g, '');
+}
+
+function formatCompetencia(dateStr) {
+  if (!dateStr) return '';
+  // TCompet: YYYYMM — toma os primeiros 7 chars (YYYY-MM) e remove o traço
+  return dateStr.substring(0, 7).replace(/-/g, '');
 }
 
 function formatDecimal(value, decimals = 2) {

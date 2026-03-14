@@ -96,41 +96,9 @@ export function renderEventos(container) {
             </tr>
           </thead>
           <tbody id="evt-table-body">
-            <tr>
-              <td><span class="badge badge-danger">Cancelamento</span></td>
-              <td class="cell-mono">3526021234...6789</td>
-              <td>Prestador</td>
-              <td>09/03/2026</td>
-              <td><span class="badge badge-success">Registrado</span></td>
-            </tr>
-            <tr>
-              <td><span class="badge badge-primary">Confirmação</span></td>
-              <td class="cell-mono">3526029876...4321</td>
-              <td>Tomador</td>
-              <td>08/03/2026</td>
-              <td><span class="badge badge-success">Confirmada</span></td>
-            </tr>
-            <tr>
-              <td><span class="badge badge-warning">Substituição</span></td>
-              <td class="cell-mono">3526021122...9012</td>
-              <td>Sistema</td>
-              <td>07/03/2026</td>
-              <td><span class="badge badge-success">Processada</span></td>
-            </tr>
-            <tr>
-              <td><span class="badge" style="background: var(--surface-glass); color: var(--color-primary-300);">Rejeição</span></td>
-              <td class="cell-mono">3526025566...1234</td>
-              <td>Tomador</td>
-              <td>06/03/2026</td>
-              <td><span class="badge badge-danger">Rejeitada</span></td>
-            </tr>
-            <tr>
-              <td><span class="badge badge-primary">Análise Fiscal</span></td>
-              <td class="cell-mono">3526023344...5678</td>
-              <td>Contribuinte</td>
-              <td>05/03/2026</td>
-              <td><span class="badge badge-warning">Pendente</span></td>
-            </tr>
+            <tr><td colspan="5" style="text-align:center; padding: var(--space-4); color: var(--color-neutral-500);">
+              Clique em "Sincronizar eventos" para carregar eventos reais da Sefin.
+            </td></tr>
           </tbody>
         </table>
       </div>
@@ -313,16 +281,18 @@ function renderSubstForm(container) {
     const justificativa = document.getElementById('subst-justificativa')?.value;
     const motivo = document.getElementById('subst-motivo')?.value.trim();
 
-    if (!chaveOrig || chaveOrig.length !== 50) return toast.error('Chave da NFS-e original inválida (50 dígitos).');
+    if (!chaveOrig || chaveOrig.length < 44) return toast.error('Chave da NFS-e original inválida (mínimo 44 dígitos).');
     if (!motivo || motivo.length < 15) return toast.error('Motivo deve ter pelo menos 15 caracteres.');
 
-    toast.info('Para concluir a substituição, emita uma nova DPS com o campo "chSubstda" preenchido com a chave da NFS-e original.');
-    toast.success(`Chave da NFS-e original copiada! Acesse "Emissão de DPS" para criar a DPS substituta.`);
-
-    // Store for use in DPS form
     sessionStorage.setItem('nfse_subst_chave', chaveOrig);
     sessionStorage.setItem('nfse_subst_motivo', justificativa);
     sessionStorage.setItem('nfse_subst_xMotivo', motivo);
+
+    toast.success('✅ Substituição iniciada! Acesse "Emissão de DPS" para criar a DPS substituta com a chave pré-preenchida.');
+
+    setTimeout(() => {
+      window.location.hash = '/emissao-dps';
+    }, 1500);
   });
 }
 

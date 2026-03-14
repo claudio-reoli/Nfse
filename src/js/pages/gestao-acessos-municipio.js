@@ -60,6 +60,46 @@ export function renderGestaoAcessosMun(container) {
       </div>
     </div>
 
+    <!-- Regime Tributário dos Contribuintes -->
+    <div class="card animate-slide-up mb-6">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 class="card-title">Regime Tributário dos Contribuintes</h3>
+        <button class="btn btn-ghost btn-sm" id="btn-regime-reload">🔄 Atualizar</button>
+      </div>
+      <div class="card-body">
+        <p class="form-help" style="margin-bottom: var(--space-3);">Configure o regime tributário de cada contribuinte. Contribuintes marcados como "Isento de Guia" não receberão guias de pagamento ISSQN geradas automaticamente.</p>
+        <div class="grid grid-3 gap-4 mb-4">
+          <div class="form-group">
+            <label class="form-label">CNPJ do Contribuinte</label>
+            <input type="text" class="form-input form-input-mono" id="reg-cnpj" placeholder="00.000.000/0000-00" maxlength="18">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Regime</label>
+            <select class="form-select" id="reg-regime">
+              <option value="normal">Normal</option>
+              <option value="simples">Simples Nacional</option>
+              <option value="mei">MEI</option>
+              <option value="lucro_presumido">Lucro Presumido</option>
+              <option value="lucro_real">Lucro Real</option>
+            </select>
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end;gap:8px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" id="reg-isento-guia" style="width:16px;height:16px;">
+              <span style="font-size:var(--text-sm);">Isento de Guia</span>
+            </label>
+            <button class="btn btn-secondary" id="btn-reg-salvar">Salvar Regime</button>
+          </div>
+        </div>
+        <div class="table-container" style="max-height: 250px; overflow-y: auto;">
+          <table class="data-table">
+            <thead><tr><th>CNPJ</th><th>Regime</th><th>Isento de Guia</th><th>Atualizado em</th><th></th></tr></thead>
+            <tbody id="reg-tabela"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <div class="card animate-slide-up mb-6">
       <div class="card-header"><h3 class="card-title">Decisões Judiciais/Administrativas</h3></div>
       <div class="card-body">
@@ -166,6 +206,81 @@ export function renderGestaoAcessosMun(container) {
       toast.error(err.message || 'Falha ao cadastrar.');
     }
   });
+
+  // ─── Regime Tributário ──────────────────────────
+  const { getSession } = await import('../auth.js').catch(() => ({ getSession: () => null }));
+
+  document.getElementById('reg-cnpj')?.addEventListener('input', (e) => {
+    let v = e.target.value.replace(/\D/g, '');
+    if (v.length > 14) v = v.substring(0, 14);
+    e.target.value = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  });
+
+  async function loadRegimes() {
+    const tbody = document.getElementById('reg-tabela');
+    if (!tbody) return;
+    try {
+      const session = getSession?.() || JSON.parse(localStorage.getItem('nfse_session') || '{}');
+      const res = await fetch(`${getBackendUrl()}/municipio/contribuinte-regime`, {
+        headers: { 'Authorization': `Bearer ${session?.token || ''}` }
+      });
+      const data = await res.json();
+      const regimes = data.regimes || [];
+      if (regimes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhum regime cadastrado.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = regimes.map(r => `
+        <tr>
+          <td class="text-mono">${r.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')}</td>
+          <td>${r.regime}</td>
+          <td>${r.isento_guia ? '✅ Sim' : '—'}</td>
+          <td style="font-size: var(--text-xs);">${r.atualizado_em ? new Date(r.atualizado_em).toLocaleDateString('pt-BR') : '—'}</td>
+          <td><button class="btn btn-ghost btn-sm btn-reg-del" data-cnpj="${r.cnpj}" style="color:var(--color-danger-400);">🗑</button></td>
+        </tr>
+      `).join('');
+      tbody.querySelectorAll('.btn-reg-del').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const cnpj = btn.dataset.cnpj;
+          if (!confirm(`Remover regime para CNPJ ${cnpj}?`)) return;
+          try {
+            const session = getSession?.() || JSON.parse(localStorage.getItem('nfse_session') || '{}');
+            await fetch(`${getBackendUrl()}/municipio/contribuinte-regime/${cnpj}`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${session?.token || ''}` }
+            });
+            toast.success('Regime removido.');
+            loadRegimes();
+          } catch (e) { toast.error('Falha ao remover.'); }
+        });
+      });
+    } catch (e) {
+      document.getElementById('reg-tabela').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--color-danger-400);">Erro ao carregar.</td></tr>';
+    }
+  }
+
+  document.getElementById('btn-reg-salvar')?.addEventListener('click', async () => {
+    const cnpj = document.getElementById('reg-cnpj')?.value?.replace(/\D/g, '') || '';
+    const regime = document.getElementById('reg-regime')?.value || 'normal';
+    const isentoGuia = document.getElementById('reg-isento-guia')?.checked || false;
+    if (cnpj.length !== 14) { toast.warning('Informe um CNPJ válido (14 dígitos).'); return; }
+    try {
+      const session = getSession?.() || JSON.parse(localStorage.getItem('nfse_session') || '{}');
+      const res = await fetch(`${getBackendUrl()}/municipio/contribuinte-regime/${cnpj}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.token || ''}` },
+        body: JSON.stringify({ regime, isento_guia: isentoGuia })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast.success('Regime salvo com sucesso!');
+      document.getElementById('reg-cnpj').value = '';
+      document.getElementById('reg-isento-guia').checked = false;
+      loadRegimes();
+    } catch (e) { toast.error(e.message || 'Falha ao salvar regime.'); }
+  });
+
+  document.getElementById('btn-regime-reload')?.addEventListener('click', loadRegimes);
+  loadRegimes();
 
   async function loadUsers() {
     const tbody = document.getElementById('mun-tabela-acessos');

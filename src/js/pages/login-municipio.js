@@ -99,12 +99,14 @@ export function renderLoginMunicipio(container) {
   });
 
   document.getElementById('btn-mun-login-certificado')?.addEventListener('click', async () => {
-    toast.info('Lendo Assinatura e-CPF...');
-    try {
-      const response = await apiLogin('333.444.555-66', '12345678');
-      handleMunLoginResponse(response);
-    } catch (e) {
-      toast.error(e.message || 'Falha na autenticação por certificado.');
-    }
+    toast.info('Funcionalidade de e-CPF Digital em implantação. Use login com usuário e senha.');
+    /*
+     * TODO: Integração com ICP-Brasil para leitura de e-CPF A3/A1
+     * O fluxo correto seria:
+     * 1. Solicitar arquivo .pfx ao usuário (input[type=file])
+     * 2. Solicitar senha/pin do token
+     * 3. Chamar loginByCertificate(certB64, subject, cnpj, passphrase)
+     * Por ora, exibe mensagem informativa.
+     */
   });
 }
