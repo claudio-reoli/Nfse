@@ -210,21 +210,18 @@ export function renderConfiguracoesMunicipio(container) {
         <h3 class="card-title">Dados Cadastrais do Município</h3>
       </div>
       <div class="card-body">
+        <input type="hidden" id="cfg-mun-nome">
         <div class="form-row mb-4">
           <div class="form-group">
             <label class="form-label">CNPJ do Município</label>
             <input class="form-input form-input-mono" id="cfg-mun-cnpj" type="text" maxlength="18" placeholder="00.000.000/0000-00">
           </div>
           <div class="form-group">
-            <label class="form-label">Nome do Município</label>
-            <input class="form-input" id="cfg-mun-nome" type="text" maxlength="150" placeholder="Município de...">
-          </div>
-        </div>
-        <div class="form-row mb-4">
-          <div class="form-group">
             <label class="form-label">UF</label>
             <input class="form-input" id="cfg-mun-uf" type="text" maxlength="2" placeholder="BA" style="text-transform: uppercase;">
           </div>
+        </div>
+        <div class="form-row mb-4">
           <div class="form-group" style="flex: 1;">
             <label class="form-label">Município (IBGE)</label>
             <div class="municipio-select-wrapper">
