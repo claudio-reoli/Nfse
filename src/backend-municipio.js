@@ -115,7 +115,21 @@ async function seedDefaultUsersIfEmpty() {
     console.log('[ DB ] PostgreSQL conectado e migrações aplicadas.');
   } catch (err) {
     console.error('[ DB ] Erro ao conectar PostgreSQL:', err.message);
-    process.exit(1);
+    // Deadlock em migração concorrente (node --watch) — aguarda e tenta novamente
+    if (err.code === '40P01' || err.message?.includes('deadlock')) {
+      console.warn('[ DB ] Deadlock detectado nas migrações — aguardando 3s e reiniciando...');
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        await db.runMigrations();
+        await seedDefaultUsersIfEmpty();
+        console.log('[ DB ] PostgreSQL conectado (retentativa bem-sucedida).');
+      } catch (err2) {
+        console.error('[ DB ] Falha na retentativa:', err2.message);
+        process.exit(1);
+      }
+    } else {
+      process.exit(1);
+    }
   }
 })();
 

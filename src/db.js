@@ -424,12 +424,20 @@ export async function getContribuinteRegime(cnpj) {
 // ─── Migrations ──────────────────────────────────────────────────────────────
 
 export async function runMigrations() {
-  const migrationsDir = join(__dirname, 'migrations');
-  const files = await fs.readdir(migrationsDir);
-  const sqlFiles = files.filter(f => f.endsWith('.sql')).sort();
-  for (const f of sqlFiles) {
-    const sql = await fs.readFile(join(migrationsDir, f), 'utf-8');
-    await pool.query(sql);
+  const client = await pool.connect();
+  try {
+    // Advisory lock previne execução concorrente (node --watch pode reiniciar 2x em seguida)
+    await client.query('SELECT pg_advisory_lock(9876543)');
+    const migrationsDir = join(__dirname, 'migrations');
+    const files = await fs.readdir(migrationsDir);
+    const sqlFiles = files.filter(f => f.endsWith('.sql')).sort();
+    for (const f of sqlFiles) {
+      const sql = await fs.readFile(join(migrationsDir, f), 'utf-8');
+      await client.query(sql);
+    }
+  } finally {
+    await client.query('SELECT pg_advisory_unlock(9876543)').catch(() => {});
+    client.release();
   }
 }
 
