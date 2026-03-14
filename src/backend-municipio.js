@@ -34,8 +34,8 @@ app.use(cors({
   origin: CORS_ORIGIN === '*' ? true : CORS_ORIGIN.split(',').map(s => s.trim()),
   credentials: true
 }));
-app.use(express.json());
-app.use(express.text({ type: ['text/xml', 'application/xml'] }));
+app.use(express.json({ limit: '8mb' }));
+app.use(express.text({ type: ['text/xml', 'application/xml'], limit: '8mb' }));
 app.use(express.static(path.join(__dirname, '..')));
 
 // ==========================================
@@ -1374,6 +1374,14 @@ app.post('/api/contribuinte/sync-adn', authenticate, async (req, res) => {
   }
 });
 
+app.get('/api/municipio/decisao-judicial', authenticate, async (req, res) => {
+  if (req.user.userType !== 'municipio') {
+    return res.status(403).json({ error: 'Acesso restrito ao município.' });
+  }
+  const decisoes = await db.getAllDecisoesJudiciais();
+  res.json({ sucesso: true, decisoes });
+});
+
 app.post('/api/municipio/decisao-judicial', authenticate, async (req, res) => {
   if (req.user.userType !== 'municipio') {
     return res.status(403).json({ error: 'Apenas usuários do município podem cadastrar decisões.' });
@@ -1383,6 +1391,15 @@ app.post('/api/municipio/decisao-judicial', authenticate, async (req, res) => {
     return res.status(400).json({ error: 'CNPJ do contribuinte e número do processo são obrigatórios.' });
   }
   await db.insertDecisaoJudicial({ cnpj: cnpjContribuinte, numeroProcesso, tipo });
+  res.json({ sucesso: true });
+});
+
+app.delete('/api/municipio/decisao-judicial/:id', authenticate, async (req, res) => {
+  if (req.user.userType !== 'municipio') {
+    return res.status(403).json({ error: 'Acesso restrito ao município.' });
+  }
+  const { id } = req.params;
+  await db.deleteDecisaoJudicial(id);
   res.json({ sucesso: true });
 });
 
@@ -1427,38 +1444,179 @@ app.get('/api/nfse/:chave', authenticate, async (req, res) => {
     }
   }
 
-  const dg = nota.dadosGerais || {};
-  const prest = nota.prestador || {};
-  const tom = nota.tomador || {};
+  const dg    = nota.dadosGerais || {};
+  const prest = nota.prestador   || {};
+  const tom   = nota.tomador     || {};
+  const serv  = nota.servico     || {};
+  const val   = nota.valores     || {};
+  const trib  = nota.tributos    || {};
+  const ti    = trib.issqn       || {};
+  const tf    = trib.federal     || {};
+  const tt    = trib.totais      || {};
+
   const endPrest = prest.endereco || prest.end || {};
-  const endTom = tom.endereco || tom.end || {};
+  const endTom   = tom.endereco   || tom.end   || {};
+
+  // Monta endereço como string para o campo Endereço do DANFSe
+  const fmtEnd = (e, p) => [
+    p.xLgr || e.xLgr, p.nro || e.nro,
+    p.xCpl || e.xCpl || 'Não Informado',
+    p.xBairro || e.xBairro,
+  ].filter(Boolean).join(', ');
+  const fmtMun = (e, p) => {
+    const m = e.xMun || p.xMun || '';
+    const u = e.UF   || e.uf   || p.UF || p.uf || '';
+    return [m, u].filter(Boolean).join(' - ');
+  };
+  const fmtCEP = (e, p) => (e.CEP || e.cep || p.CEP || p.cep || '').replace(/(\d{5})(\d{3})/, '$1-$2');
+  const fmtDoc = (p) => {
+    const cnpj = p.CNPJ || p.cnpj || '';
+    if (cnpj) return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    const cpf = p.CPF || p.cpf || '';
+    return cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+  };
+
+  const vServ  = val.vServ  ?? 0;
+  const vBC    = val.vBC    ?? vServ;
+  const vLiq   = val.vLiq   ?? vServ;
+  const vISS   = val.vISSQN ?? val.vISS ?? ti.vISS ?? 0;
+  const pAliq  = ti.pAliq   ?? val.pAliq ?? 0;
+  const vIRRF  = tf.vRetIRRF  ?? tf.vIRRF  ?? 0;
+  const vRetCP = tf.vRetCP    ?? 0;
+  const vRetPC = tf.vRetCSLL  ?? 0;
+  const vPIS   = tf.vPis      ?? tf.vPIS   ?? val.vPis ?? val.vPIS ?? 0;
+  const vCofins= tf.vCofins   ?? val.vCofins ?? 0;
+  const vTotFed= vIRRF + vRetCP + vPIS + vCofins;
+
+  const config = await db.getConfig().catch(() => ({}));
 
   const infNFSe = {
-    nNFSe: dg.nNFSe || '',
-    dhEmi: dg.dhEmi || '',
-    dhProc: dg.dhProc || dg.dhEmi || '',
-    ambGer: dg.ambGer || '2',
+    // ── Identificação ──────────────────────────────────────────
+    nNFSe:   dg.nNFSe   || '',
+    dhNFSe:  dg.dhProc  || dg.dhEmi || '',
+    nDPS:    dg.nDPS    || '',
+    serie:   dg.serie   || '',
+    dCompet: dg.dCompet || nota.competencia || '',
+    dhDPS:   dg.dhEmi   || '',
+    ambGer:  dg.ambGer  || '2',
+    // ── Município emissor ───────────────────────────────────────
+    _munNome:      config.nome       || dg.xLocEmi || '',
+    _munPrefeitura:config.prefeitura || '',
+    _munFone:      config.telefone   || '',
+    _munEmail:     config.email      || '',
+    _munBrasao:    config.brasao     || '',
+    // ── Prestador ──────────────────────────────────────────────
     emit: {
-      CNPJ: prest.CNPJ || prest.cnpj || '',
-      CPF: prest.CPF || prest.cpf || '',
+      CNPJ:  prest.CNPJ || prest.cnpj || '',
+      CPF:   prest.CPF  || prest.cpf  || '',
+      NIF:   prest.NIF  || '',
       xNome: prest.xNome || prest.nome || '',
-      endereco: { cMun: endPrest.cMun, xMun: endPrest.xMun, UF: endPrest.UF || endPrest.uf, cPais: endPrest.cPais || 'BR' }
+      IM:    prest.IM   || '',
+      fone:  prest.fone || '',
+      email: prest.email || '',
+      endereco: {
+        xLgr:    endPrest.xLgr    || prest.xLgr    || '',
+        nro:     endPrest.nro     || prest.nro      || '',
+        xCpl:    endPrest.xCpl    || prest.xCpl     || 'Não Informado',
+        xBairro: endPrest.xBairro || prest.xBairro  || '',
+        cMun:    endPrest.cMun    || prest.cMun      || '',
+        xMun:    endPrest.xMun    || prest.xMun      || '',
+        UF:      endPrest.UF      || endPrest.uf     || prest.UF || prest.uf || '',
+        CEP:     endPrest.CEP     || endPrest.cep    || prest.CEP || prest.cep || '',
+      },
+      // Regime tributário
+      opSimpNac:  prest.opSimpNac  || dg.opSimpNac  || '',
+      regApurSN:  prest.regApurSN  || dg.regApurSN  || '',
+      regEspTrib: prest.regEspTrib || ti.regEspTrib  || '0',
     },
+    // ── Tomador ────────────────────────────────────────────────
     toma: {
-      CNPJ: tom.CNPJ || tom.cnpj || '',
-      CPF: tom.CPF || tom.cpf || '',
+      CNPJ:  tom.CNPJ || tom.cnpj || '',
+      CPF:   tom.CPF  || tom.cpf  || '',
+      NIF:   tom.NIF  || '',
       xNome: tom.xNome || tom.nome || '',
-      endereco: { cMun: endTom.cMun, xMun: endTom.xMun, UF: endTom.UF || endTom.uf, cPais: endTom.cPais || 'BR', xCidade: endTom.xCidade }
+      IM:    tom.IM   || '',
+      fone:  tom.fone || '',
+      email: tom.email || '',
+      endereco: {
+        xLgr:    endTom.xLgr    || tom.xLgr    || '',
+        nro:     endTom.nro     || tom.nro      || '',
+        xCpl:    endTom.xCpl    || tom.xCpl     || '',
+        xBairro: endTom.xBairro || tom.xBairro  || '',
+        cMun:    endTom.cMun    || tom.cMun      || '',
+        xMun:    endTom.xMun    || tom.xMun      || '',
+        UF:      endTom.UF      || endTom.uf     || tom.UF || tom.uf || '',
+        CEP:     endTom.CEP     || endTom.cep    || tom.CEP || tom.cep || '',
+      },
     },
+    // ── Serviço ────────────────────────────────────────────────
+    serv: {
+      cTribNac:      serv.cServ?.cTribNac  || serv.cTribNac  || '',
+      cTribMun:      serv.cServ?.cTribMun  || serv.cTribMun  || '',
+      cNBS:          serv.cServ?.cNBS      || serv.cNBS      || '',
+      xDescServ:     serv.xDescServ || '',
+      cLocPrestacao: serv.cLocPrestacao    || serv.cLocPrest  || dg.cLocIncid || '',
+      xLocPrestacao: serv.xLocPrestacao   || '',
+      cPaisPrestacao:serv.cPaisPrestacao  || '',
+    },
+    // ── Tributação Municipal (ISSQN) ────────────────────────────
+    tributos: {
+      issqn: {
+        tribISSQN:   ti.tribISSQN  || '1',
+        cPaisResult: ti.cPaisResult || '',
+        cLocIncid:   ti.cLocIncid   || serv.cLocPrestacao || dg.cLocIncid || '',
+        regEspTrib:  prest.regEspTrib || ti.regEspTrib    || '0',
+        tpImunidade: ti.tpImunidade  || '',
+        tpSusp:      ti.tpSusp       || ti.cExigSusp      || '0',
+        nProcesso:   ti.nProcesso    || '',
+        nBM:         ti.nBM          || '',
+        vDescIncond: val.vDescIncond  ?? 0,
+        vDedRed:     val.vDedRed      ?? val.dedRed?.vDR ?? 0,
+        vCalcBM:     val.vCalcBM      ?? 0,
+        vBC:         vBC,
+        pAliq:       pAliq,
+        tpRetISSQN:  ti.tpRetISSQN   || '1',
+        vISS:        vISS,
+      },
+      federal: {
+        vRetIRRF:   vIRRF,
+        vRetCP:     vRetCP,
+        vRetCSLL:   vRetPC,
+        vPis:       vPIS,
+        vCofins:    vCofins,
+        tpRetPisCofins: tf.tpRetPisCofins || '',
+        vTotFed:    vTotFed,
+      },
+      totais: {
+        vTotTribFed: tt.vTotTribFed ?? 0,
+        vTotTribEst: tt.vTotTribEst ?? 0,
+        vTotTribMun: tt.vTotTribMun ?? 0,
+      },
+      ibscbs: trib.ibscbs || {},
+    },
+    // ── Valores ────────────────────────────────────────────────
     valores: {
-      vServ: nota.valores?.vServ ?? 0,
-      vBC: nota.valores?.vBC ?? nota.valores?.vServ ?? 0,
-      vISSQN: nota.valores?.vISSQN ?? nota.valores?.vISS ?? 0,
-      vPIS: nota.valores?.vPis ?? nota.tributos?.federal?.vPis ?? 0,
-      vCofins: nota.valores?.vCofins ?? nota.tributos?.federal?.vCofins ?? 0,
-      vLiq: nota.valores?.vLiq ?? nota.valores?.vServ ?? 0
+      vServ:       vServ,
+      vDescCond:   val.vDescCond  ?? 0,
+      vDescIncond: val.vDescIncond ?? 0,
+      vBC:         vBC,
+      vISSQN:      vISS,
+      vLiq:        vLiq,
+      pAliq:       pAliq,
+      vPis:        vPIS,
+      vCofins:     vCofins,
+      // campos adicionais para totais
+      vISSQNRet:   (ti.tpRetISSQN === '2' || ti.tpRetISSQN === '3') ? vISS : 0,
+      vTribFed:    vTotFed,
+      vPisCofinsDev: vPIS + vCofins,
     },
-    IBSCBS: nota.tributos?.ibscbs || {}
+    // Info complementar
+    xInfComp: dg.xInfComp || '',
+    nbs:      serv.cServ?.cNBS || serv.cNBS || '',
+    // Mantém compatibilidade com código anterior
+    dadosGerais: dg,
+    prestador:   prest,
+    tomador:     tom,
   };
 
   res.json({ cStat: '100', infNFSe, fonte: 'local' });

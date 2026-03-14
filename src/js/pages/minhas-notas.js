@@ -80,27 +80,132 @@ export async function renderMinhasNotas(container) {
         const xmlStr = nota.xmlOriginal || nota.xml || `<!-- XML não disponível para NSU ${nota.nsu} -->`;
         downloadXml(xmlStr, `NFSe_${nota.chaveAcesso || nota.nsu}.xml`);
       } else if (e.target.classList.contains('btn-nota-danfse')) {
-        const dadosGerais = nota.dadosGerais || {};
-        const prest = nota.prestador || {};
-        const toma = nota.tomador || {};
-        const val = nota.valores || {};
+        const g     = nota.dadosGerais || {};
+        const prest = nota.prestador   || {};
+        const toma  = nota.tomador     || {};
+        const serv  = nota.servico     || {};
+        const val   = nota.valores     || {};
+        const ti    = nota.tributos?.issqn   || {};
+        const tf    = nota.tributos?.federal || {};
+        const tt    = nota.tributos?.totais  || {};
+        const endP  = prest.endereco || {};
+        const endT  = toma.endereco  || {};
+
+        const fmtDocMN = (p) => {
+          const cnpj = String(p.CNPJ || p.cnpj || '').replace(/\D/g, '');
+          if (cnpj.length === 14) return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+          const cpf = String(p.CPF || p.cpf || '').replace(/\D/g, '');
+          if (cpf.length === 11)  return cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+          return p.NIF || '';
+        };
+        const fmtEndMN = (e, p) => [
+          e.xLgr || p.xLgr, e.nro || p.nro,
+          e.xCpl || p.xCpl || (e.xLgr || p.xLgr ? 'Não Informado' : ''),
+          e.xBairro || p.xBairro,
+        ].filter(Boolean).join(', ');
+        const fmtMunMN = (e, p) => {
+          const m = e.xMun || p.xMun || '';
+          const u = e.UF || e.uf || p.UF || p.uf || '';
+          return [m, u].filter(Boolean).join(' - ');
+        };
+        const fmtCEPMN = (e, p) => {
+          const raw = String(e.CEP || e.cep || p.CEP || p.cep || '').replace(/\D/g, '');
+          return raw.length === 8 ? raw.replace(/(\d{5})(\d{3})/, '$1-$2') : raw;
+        };
+
+        const vServ    = val.vServ   ?? nota.valorServico ?? 0;
+        const vBC      = val.vBC     ?? vServ;
+        const vLiq     = val.vLiq    ?? vServ;
+        const vISS     = val.vISSQN  ?? val.vISS ?? ti.vISS ?? 0;
+        const pAliq    = ti.pAliq    ?? val.pAliq ?? nota.aliquota ?? 0;
+        const vIRRF    = tf.vRetIRRF ?? 0;
+        const vRetCP   = tf.vRetCP   ?? 0;
+        const vRetPC   = tf.vRetCSLL ?? 0;
+        const vPIS     = tf.vPis     ?? tf.vPIS   ?? 0;
+        const vCofins  = tf.vCofins  ?? 0;
+        const vTotFed  = vIRRF + vRetCP + vPIS + vCofins;
+        const tpRet    = ti.tpRetISSQN || '1';
+        const localPrest = serv.xLocPrestacao || String(serv.cLocPrestacao || ti.cLocIncid || '');
+
         openDANFSe({
-          nNFSe: dadosGerais.nNFSe || nota.nNFSe || '—',
-          chaveAcesso: nota.chaveAcesso || '',
-          dhProc: nota.dataImportacao ? new Date(nota.dataImportacao).toLocaleString('pt-BR') : '—',
-          tpAmb: dadosGerais.tpAmb || '2',
-          dCompet: nota.competencia || dadosGerais.dCompet || '—',
-          prest: { doc: prest.CNPJ || prest.cpf || '—', xNome: prest.xNome || prest.nome || '—', IM: prest.IM || '' },
-          toma: { doc: toma.CNPJ || toma.cpf || '—', xNome: toma.xNome || toma.nome || '—', IM: toma.IM || '' },
-          serv: { cTribNac: nota.servico?.cServ?.cTribNac || nota.servico?.cTribNac || '—', xDescServ: nota.servico?.xDescServ || '—', localPrest: String(nota.dadosGerais?.cLocIncid || '').padStart(7,'0') },
-          valores: {
-            vServ: `R$ ${(val.vServ || nota.valorServico || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}`,
-            vBC: `R$ ${(val.vBC || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}`,
-            pAliq: `${(val.pAliq || nota.aliquota || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}`,
-            vISSQN: `R$ ${(val.vISS || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}`,
-            vLiq: `R$ ${(val.vLiq || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}`,
+          mun: { nome: g.xLocEmi || '', prefeitura: '', fone: '', email: '', brasao: '' },
+          nNFSe:      g.nNFSe    || nota.nNFSe || '',
+          chaveAcesso:nota.chaveAcesso || '',
+          dCompet:    g.dCompet  || nota.competencia || '',
+          dhNFSe:     g.dhProc   || g.dhEmi || '',
+          nDPS:       g.nDPS     || '',
+          serie:      g.serie    || '',
+          dhDPS:      g.dhEmi    || '',
+          prest: {
+            doc:       fmtDocMN(prest),
+            xNome:     prest.xNome  || prest.nome  || '',
+            IM:        prest.IM     || '',
+            fone:      prest.fone   || '',
+            email:     prest.email  || '',
+            endereco:  fmtEndMN(endP, prest),
+            municipio: fmtMunMN(endP, prest),
+            cep:       fmtCEPMN(endP, prest),
+            opSimpNac: prest.opSimpNac  || '',
+            regApurSN: prest.regApurSN  || '',
+            regEspTrib:prest.regEspTrib || '',
           },
-          ibscbs: { vBC: 'R$ 0,00', pAliqEfetUF: '0,10', vIBSUF: 'R$ 0,00', pAliqEfetMun: '0,05', vIBSMun: 'R$ 0,00', pAliqEfetCBS: '0,90', vCBS: 'R$ 0,00', vIBSTot: 'R$ 0,00', vTotNF: `R$ ${(val.vLiq || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}` },
+          toma: {
+            doc:       fmtDocMN(toma),
+            xNome:     toma.xNome  || toma.nome  || '',
+            IM:        toma.IM     || '',
+            fone:      toma.fone   || '',
+            email:     toma.email  || '',
+            endereco:  fmtEndMN(endT, toma),
+            municipio: fmtMunMN(endT, toma),
+            cep:       fmtCEPMN(endT, toma),
+          },
+          interm: null,
+          serv: {
+            cTribNac:   serv.cServ?.cTribNac || serv.cTribNac || '',
+            cTribMun:   serv.cServ?.cTribMun || serv.cTribMun || '',
+            localPrest: localPrest,
+            cPaisPrest: serv.cPaisPrestacao  || '',
+            xDescServ:  serv.xDescServ       || '',
+          },
+          tribMun: {
+            tribISSQN:   ti.tribISSQN  || '1',
+            cPaisResult: ti.cPaisResult || '',
+            cLocIncid:   ti.cLocIncid   || localPrest,
+            regEspTrib:  prest.regEspTrib || ti.regEspTrib || '0',
+            tpImunidade: ti.tpImunidade  || '',
+            tpSusp:      ti.tpSusp || ti.cExigSusp || '0',
+            nProcesso:   ti.nProcesso    || '',
+            nBM:         ti.nBM          || '',
+            vServ:       vServ,
+            vDescIncond: val.vDescIncond ?? 0,
+            vDedRed:     val.vDedRed     ?? val.dedRed?.vDR ?? 0,
+            vCalcBM:     val.vCalcBM     ?? 0,
+            vBC:         vBC,
+            pAliq:       pAliq,
+            tpRetISSQN:  tpRet,
+            vISSQN:      vISS,
+          },
+          tribFed: {
+            vIRRF:             vIRRF,
+            vRetCP:            vRetCP,
+            vRetPisCofinsCSLL: vRetPC,
+            vPIS:              vPIS,
+            vCofins:           vCofins,
+            tpRetPisCofins:    tf.tpRetPisCofins || '',
+            vTotFed:           vTotFed,
+          },
+          totais: {
+            vServ:        vServ,
+            vDescCond:    val.vDescCond  ?? 0,
+            vDescIncond:  val.vDescIncond ?? 0,
+            vISSQNRet:    (tpRet === '2' || tpRet === '3') ? vISS : 0,
+            vTribFed:     vTotFed,
+            vPisCofinsDev:vPIS + vCofins,
+            vLiq:         vLiq,
+          },
+          totApro: { vFed: tt.vTotTribFed ?? 0, vEst: tt.vTotTribEst ?? 0, vMun: tt.vTotTribMun ?? 0 },
+          xInfComp: g.xInfComp || '',
+          nbs:      serv.cServ?.cNBS || serv.cNBS || '',
         });
       }
     });

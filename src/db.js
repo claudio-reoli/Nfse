@@ -411,6 +411,20 @@ export async function insertDecisaoJudicial(data) {
   );
 }
 
+export async function getAllDecisoesJudiciais() {
+  const r = await pool.query(
+    'SELECT * FROM decisao_judicial ORDER BY criado_em DESC'
+  );
+  return rowsToCamel(r.rows);
+}
+
+export async function deleteDecisaoJudicial(id) {
+  await pool.query(
+    'UPDATE decisao_judicial SET ativo = false WHERE id = $1',
+    [id]
+  );
+}
+
 // ─── Contribuinte Regime (Simples/MEI) ────────────────────────────────────────
 
 export async function getContribuinteRegime(cnpj) {

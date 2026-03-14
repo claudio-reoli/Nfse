@@ -209,6 +209,44 @@ export function renderEmissaoDPS(container) {
             <input class="form-input" id="prest-email" type="email" maxlength="80">
           </div>
         </div>
+
+        <div class="section-title" style="margin-top: var(--space-6);">
+          <span class="icon">📋</span>Regime Tributário do Prestador
+        </div>
+
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">Simples Nacional na Competência <span class="required">*</span></label>
+            <select class="form-select" id="prest-opSimpNac">
+              <option value="1" selected>1 — Não Optante</option>
+              <option value="2">2 — MEI</option>
+              <option value="3">3 — Optante ME/EPP</option>
+            </select>
+            <span class="form-help">Exibido no DANFSe (campo obrigatório)</span>
+          </div>
+          <div class="form-group" id="wrap-prest-regApurSN">
+            <label class="form-label">Regime de Apuração pelo SN</label>
+            <select class="form-select" id="prest-regApurSN">
+              <option value="1" selected>1 — Federal e Municipal pelo Simples Nacional</option>
+              <option value="2">2 — Federal pelo SN, ISSQN apurado por fora</option>
+              <option value="3">3 — Federal por fora, ISSQN pelo Simples Nacional</option>
+            </select>
+            <span class="form-help">Obrigatório quando Simples Nacional = MEI ou ME/EPP</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Regime Especial de Tributação</label>
+            <select class="form-select" id="prest-regEspTrib">
+              <option value="0" selected>0 — Nenhum</option>
+              <option value="1">1 — Ato Cooperado</option>
+              <option value="2">2 — Estimativa</option>
+              <option value="3">3 — ME Municipal</option>
+              <option value="4">4 — Notário / Registrador</option>
+              <option value="5">5 — Profissional Autônomo</option>
+              <option value="6">6 — Sociedade de Profissionais</option>
+              <option value="9">9 — Outros</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -472,6 +510,29 @@ export function renderEmissaoDPS(container) {
         </div>
 
         <div class="section-title" style="margin-top: var(--space-6);">
+          <span class="icon">🏛️</span>Tributação Municipal (ISSQN)
+        </div>
+
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">Tributação do ISSQN <span class="required">*</span></label>
+            <select class="form-select" id="val-tribISSQN">
+              <option value="1" selected>1 — Operação Tributável</option>
+              <option value="2">2 — Imunidade</option>
+              <option value="3">3 — Exportação</option>
+              <option value="4">4 — Não Incidência</option>
+              <option value="5">5 — Suspensão da Exigibilidade</option>
+            </select>
+            <span class="form-help">Natureza da tributação do ISSQN</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Alíquota ISSQN (%)</label>
+            <input class="form-input form-input-mono" id="val-pAliq" type="text" placeholder="0,00">
+            <span class="form-help">Ex: 2,00 para 2% (até 4 casas decimais)</span>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top: var(--space-6);">
           <span class="icon">🏛️</span>Tributos Federais
         </div>
 
@@ -517,7 +578,7 @@ export function renderEmissaoDPS(container) {
           <span class="icon">📊</span>Retenções
         </div>
 
-        <div class="form-row">
+        <div class="form-row mb-4">
           <div class="form-group">
             <label class="form-label">ISSQN Retido?</label>
             <select class="form-select" id="val-tpRetISSQN">
@@ -532,6 +593,24 @@ export function renderEmissaoDPS(container) {
           <div class="form-group">
             <label class="form-label">Retenção IRRF (R$)</label>
             <input class="form-input form-input-mono" id="val-vRetIRRF" type="text" placeholder="0,00">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Valor INSS (R$)</label>
+            <input class="form-input form-input-mono" id="val-vINSS" type="text" placeholder="0,00">
+            <span class="form-help">INSS apurado (tribFed)</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Valor IR (R$)</label>
+            <input class="form-input form-input-mono" id="val-vIR" type="text" placeholder="0,00">
+            <span class="form-help">IR apurado (tribFed)</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Valor CSLL (R$)</label>
+            <input class="form-input form-input-mono" id="val-vCSLL" type="text" placeholder="0,00">
+            <span class="form-help">CSLL apurada (tribFed)</span>
           </div>
         </div>
       </div>
@@ -1072,6 +1151,17 @@ function setupMasks() {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', () => { el.value = maskPhone(el.value); });
   });
+
+  // Mostrar/ocultar regApurSN conforme opSimpNac
+  const opSimpNacEl = document.getElementById('prest-opSimpNac');
+  const wrapRegApurSN = document.getElementById('wrap-prest-regApurSN');
+  if (opSimpNacEl && wrapRegApurSN) {
+    const toggleRegApurSN = () => {
+      wrapRegApurSN.style.display = opSimpNacEl.value !== '1' ? '' : 'none';
+    };
+    toggleRegApurSN();
+    opSimpNacEl.addEventListener('change', toggleRegApurSN);
+  }
 
   // CNPJ/CPF mask for tomador
   const tomaDoc = document.getElementById('toma-doc');

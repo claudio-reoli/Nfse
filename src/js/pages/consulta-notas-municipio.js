@@ -88,35 +88,56 @@ export function renderConsultaNotasMun(container) {
         <p class="page-description">Consulta ao repositório local de NFS-e sincronizadas — todos os campos da API ADN.</p>
       </div>
       <button class="btn btn-secondary" onclick="window.location.hash='/dashboard'">
-        <i class="fas fa-arrow-left"></i> Voltar ao Painel
+        ← Voltar ao Painel
       </button>
     </div>
 
     <div class="card animate-slide-up">
-      <div class="card-header" style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <input type="text" class="form-input" id="filtro-pesquisa" placeholder="Buscar por Chave, CNPJ, Nome, Serviço..." style="max-width: 350px;">
+      <div class="card-header" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <input type="text" class="form-input" id="filtro-pesquisa"
+          placeholder="Buscar por Chave, CNPJ, Nome, Serviço..."
+          style="flex:1;min-width:180px;max-width:340px;">
         <button class="btn btn-secondary" id="btn-buscar">🔍 Buscar</button>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+          <label style="font-size:0.82rem;color:var(--color-neutral-400);white-space:nowrap;">Exibir:</label>
+          <select class="form-select" id="sel-por-pagina" style="width:76px;padding:4px 8px;">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="0">Todos</option>
+          </select>
+          <span id="label-total-registros" style="font-size:0.82rem;color:var(--color-neutral-500);white-space:nowrap;"></span>
+        </div>
       </div>
-      
-      <div class="table-container">
-        <table class="data-table data-table--notas-adn" id="tabela-notas">
+
+      <div class="table-container" style="overflow-x:auto;">
+        <table class="data-table" id="tabela-notas" style="min-width:700px;">
           <thead>
             <tr>
-              <th>NSU / Competência</th>
-              <th>Chave da NFS-e</th>
-              <th>Prestador</th>
-              <th>Tomador</th>
-              <th>Serviço</th>
-              <th>Valor (R$)</th>
-              <th>ISS</th>
-              <th>Fonte</th>
-              <th>Ações</th>
+              <th style="width:80px;">NSU</th>
+              <th style="width:110px;">Competência</th>
+              <th>Prestador / Tomador</th>
+              <th style="max-width:180px;">Serviço</th>
+              <th style="width:110px;text-align:right;">Valor (R$)</th>
+              <th style="width:70px;text-align:center;">ISS</th>
+              <th style="width:60px;text-align:center;">Fonte</th>
+              <th style="width:40px;text-align:center;"></th>
             </tr>
           </thead>
           <tbody>
-            <tr><td colspan="9" style="text-align: center;">Carregando notas...</td></tr>
+            <tr><td colspan="8" style="text-align:center;">Carregando notas...</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <div id="paginacao-bar" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--surface-glass-border);flex-wrap:wrap;gap:8px;">
+        <span id="pag-info" style="font-size:0.82rem;color:var(--color-neutral-400);"></span>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <button class="btn btn-ghost btn-sm" id="btn-pag-prev" style="padding:3px 10px;">‹</button>
+          <span id="pag-nums" style="display:flex;gap:3px;"></span>
+          <button class="btn btn-ghost btn-sm" id="btn-pag-next" style="padding:3px 10px;">›</button>
+        </div>
       </div>
     </div>
 
@@ -133,40 +154,49 @@ export function renderConsultaNotasMun(container) {
   `;
 
   let localNotasData = [];
+  let filteredData = [];
+  let currentPage = 1;
+  let porPagina = 25;
 
   const getNome = (p) => p?.xNome || p?.nome || '—';
   const getDoc = (p) => p?.CNPJ || p?.cnpj || p?.CPF || p?.cpf || '';
   const getValor = (n) => n.valores?.vServ ?? n.valorServico ?? 0;
   const getCompet = (n) => n.dadosGerais?.dCompet || n.competencia || '';
   const getAliq = (n) => n.tributos?.issqn?.pAliq ?? n.aliquota ?? 0;
-  const getTribDesc = (n) => {
-    const t = n.tributos?.issqn?.tribISSQN;
-    return TRIB_ISSQN_MAP[t] || '';
-  };
   const getRetDesc = (n) => {
     const r = n.tributos?.issqn?.tpRetISSQN;
     return r ? (RET_ISSQN_MAP[r] || r) : (n.issRetidoFonte ? 'Retido' : '');
   };
-  const getServDesc = (n) => n.servico?.xDescServ || '—';
+  const getServDesc = (n) => {
+    const desc = n.servico?.xDescServ || '';
+    return desc.length > 45 ? desc.substring(0, 43) + '…' : (desc || '—');
+  };
 
   function renderNotasTable(notas) {
-    const tbody = document.getElementById('tabela-notas').querySelector('tbody');
+    filteredData = notas || [];
+    currentPage = 1;
+    renderPage();
+  }
+
+  function renderPage() {
+    const tbody = document.getElementById('tabela-notas')?.querySelector('tbody');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
-    if (!notas || notas.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Nenhuma nota encontrada.</td></tr>';
+    const total = filteredData.length;
+    const start = (currentPage - 1) * porPagina;
+    const end = porPagina === 0 ? total : Math.min(start + porPagina, total);
+    const pageData = porPagina === 0 ? filteredData : filteredData.slice(start, end);
+
+    if (total === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;">Nenhuma nota encontrada.</td></tr>';
+      updatePaginacao(0, 0, 0);
       return;
     }
 
-    notas.forEach((n) => {
+    pageData.forEach((n) => {
       const tr = document.createElement('tr');
       const cStat = n.dadosGerais?.cStat || '';
-      const decisaoBadge = cStat === '102'
-        ? '<span class="badge badge-danger" style="font-size:0.7rem;" title="Decisão Judicial/Administrativa — homologação manual">⚠️ Decisão Judicial</span>'
-        : '';
-      const fonteBadge = n._fonte === 'ADN'
-        ? '<span class="badge badge-success" style="font-size:0.7rem;">ADN</span>'
-        : '<span class="badge badge-warning" style="font-size:0.7rem;">Local</span>';
       const chave = n.chaveAcesso || '';
       const prestNome = getNome(n.prestador);
       const prestDoc = getDoc(n.prestador);
@@ -174,38 +204,70 @@ export function renderConsultaNotasMun(container) {
       const tomaDoc = getDoc(n.tomador);
       const aliq = getAliq(n);
       const retInfo = getRetDesc(n);
+      const retColor = retInfo.includes('Retido') && !retInfo.includes('Não') ? 'var(--color-danger-400)' : 'var(--color-neutral-400)';
+      const fonteBadge = n._fonte === 'ADN'
+        ? '<span class="badge badge-success" style="font-size:0.65rem;">ADN</span>'
+        : '<span class="badge badge-warning" style="font-size:0.65rem;">Local</span>';
+      const decisaoBadge = cStat === '102'
+        ? '<span class="badge badge-danger" style="font-size:0.65rem;" title="Decisão Judicial">⚠️</span>'
+        : '';
 
       tr.innerHTML = `
+        <td style="font-size:0.82rem;font-weight:600;color:var(--color-neutral-300);">${n.nsu}</td>
+        <td style="font-size:0.8rem;color:var(--color-neutral-400);">${getCompet(n)}</td>
         <td>
-          <div style="font-weight:500;">NSU ${n.nsu}</div>
-          <div style="font-size:0.8rem;color:var(--color-neutral-400);">${getCompet(n)}</div>
+          <div style="font-size:0.85rem;font-weight:500;">${prestNome}</div>
+          <div class="text-mono" style="font-size:0.75rem;color:var(--color-neutral-500);">${fmtCNPJ(prestDoc)}</div>
+          <div style="font-size:0.78rem;color:var(--color-neutral-400);margin-top:2px;">↳ ${tomaNome}</div>
+          <div class="text-mono" style="font-size:0.72rem;color:var(--color-neutral-600);">${fmtCNPJ(tomaDoc)}</div>
         </td>
-        <td class="text-mono" title="${chave}">${chave || '—'}</td>
-        <td>
-          <div style="font-weight:500;">${prestNome}</div>
-          <div class="text-mono" style="font-size:0.78rem;color:var(--color-neutral-400);">${fmtCNPJ(prestDoc)}</div>
-        </td>
-        <td>
-          <div style="font-weight:500;">${tomaNome}</div>
-          <div class="text-mono" style="font-size:0.78rem;color:var(--color-neutral-400);">${fmtCNPJ(tomaDoc)}</div>
-        </td>
-        <td style="font-size:0.82rem;">${getServDesc(n)}</td>
-        <td style="font-weight:600;color:var(--color-primary-400);">${fmtBRL(getValor(n))}</td>
-        <td style="font-size:0.82rem;">
+        <td style="font-size:0.8rem;max-width:180px;" title="${n.servico?.xDescServ || ''}">${getServDesc(n)}</td>
+        <td style="font-weight:600;color:var(--color-primary-400);text-align:right;white-space:nowrap;">${fmtBRL(getValor(n))}</td>
+        <td style="font-size:0.8rem;text-align:center;">
           <div>${aliq ? fmtPct(aliq) : '—'}</div>
-          <div style="font-size:0.75rem;color:${retInfo.includes('Retido') && !retInfo.includes('Não') ? 'var(--color-danger-400)' : 'var(--color-success-400)'};">${retInfo || '—'}</div>
+          <div style="font-size:0.72rem;color:${retColor};">${retInfo ? retInfo.replace('Retido pelo ', '') : '—'}</div>
         </td>
+        <td style="text-align:center;">${fonteBadge}${decisaoBadge ? '<br>' + decisaoBadge : ''}</td>
         <td style="text-align:center;">
-          <div style="display:flex;flex-direction:column;gap:4px;align-items:center;">${fonteBadge}${decisaoBadge}</div>
-        </td>
-        <td>
-          <button class="btn btn-primary btn-sm btn-detalhes" data-chave="${chave}" title="Exibir todos os dados da nota agrupados por negócio">
-            <i class="fas fa-file-invoice"></i> Ver dados completos
-          </button>
+          <button class="btn btn-ghost btn-sm btn-detalhes" data-chave="${chave}"
+            title="Ver dados completos da nota"
+            style="font-size:1.05rem;padding:3px 7px;line-height:1;">📋</button>
         </td>
       `;
       tbody.appendChild(tr);
     });
+
+    updatePaginacao(total, porPagina === 0 ? 1 : start + 1, end);
+  }
+
+  function updatePaginacao(total, from, to) {
+    const labelTotal = document.getElementById('label-total-registros');
+    const info = document.getElementById('pag-info');
+    const numsEl = document.getElementById('pag-nums');
+    const prevBtn = document.getElementById('btn-pag-prev');
+    const nextBtn = document.getElementById('btn-pag-next');
+    const totalPages = porPagina === 0 ? 1 : Math.ceil(total / porPagina);
+
+    if (labelTotal) labelTotal.textContent = `${total} registro(s)`;
+    if (info) info.textContent = total > 0 ? `Exibindo ${from}–${to} de ${total}` : 'Nenhum registro';
+
+    if (numsEl) {
+      numsEl.innerHTML = '';
+      if (totalPages > 1) {
+        const rangeStart = Math.max(1, currentPage - 2);
+        const rangeEnd = Math.min(totalPages, rangeStart + 4);
+        for (let p = rangeStart; p <= rangeEnd; p++) {
+          const b = document.createElement('button');
+          b.className = `btn btn-sm ${p === currentPage ? 'btn-primary' : 'btn-ghost'}`;
+          b.style.cssText = 'min-width:30px;padding:3px 8px;';
+          b.textContent = p;
+          b.addEventListener('click', () => { currentPage = p; renderPage(); });
+          numsEl.appendChild(b);
+        }
+      }
+    }
+    if (prevBtn) prevBtn.disabled = currentPage <= 1;
+    if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
   }
 
   document.getElementById('tabela-notas')?.addEventListener('click', (e) => {
@@ -227,8 +289,8 @@ export function renderConsultaNotasMun(container) {
       renderNotasTable(localNotasData);
     } catch (err) {
       console.error('Erro ao carregar NFSe:', err);
-      document.getElementById('tabela-notas').querySelector('tbody').innerHTML =
-        '<tr><td colspan="9" style="text-align:center;color:var(--color-danger-400);">Erro ao conectar ao Backend-município.</td></tr>';
+      document.getElementById('tabela-notas')?.querySelector('tbody').insertAdjacentHTML('afterbegin',
+        '<tr><td colspan="8" style="text-align:center;color:var(--color-danger-400);padding:24px;">Erro ao conectar ao backend.</td></tr>');
     }
   }
 
@@ -457,7 +519,7 @@ export function renderConsultaNotasMun(container) {
 
   loadNotas();
 
-  document.getElementById('btn-buscar')?.addEventListener('click', () => {
+  function runSearch() {
     const termo = document.getElementById('filtro-pesquisa')?.value.toLowerCase().trim();
     if (!termo) { renderNotasTable(localNotasData); return; }
     const filtered = localNotasData.filter(n => {
@@ -472,5 +534,26 @@ export function renderConsultaNotasMun(container) {
     });
     renderNotasTable(filtered);
     toast.info(`${filtered.length} nota(s) encontrada(s).`);
+  }
+
+  document.getElementById('btn-buscar')?.addEventListener('click', runSearch);
+
+  document.getElementById('filtro-pesquisa')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runSearch();
+  });
+
+  document.getElementById('sel-por-pagina')?.addEventListener('change', (e) => {
+    porPagina = parseInt(e.target.value, 10);
+    currentPage = 1;
+    renderPage();
+  });
+
+  document.getElementById('btn-pag-prev')?.addEventListener('click', () => {
+    if (currentPage > 1) { currentPage--; renderPage(); }
+  });
+
+  document.getElementById('btn-pag-next')?.addEventListener('click', () => {
+    const totalPages = porPagina === 0 ? 1 : Math.ceil(filteredData.length / porPagina);
+    if (currentPage < totalPages) { currentPage++; renderPage(); }
   });
 }

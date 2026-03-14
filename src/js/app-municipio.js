@@ -7,6 +7,8 @@ import { renderLoginMunicipio } from './pages/login-municipio.js';
 import { renderGestaoAcessosMun } from './pages/gestao-acessos-municipio.js';
 import { renderConsultaNotasMun } from './pages/consulta-notas-municipio.js';
 import { renderConfiguracoesMunicipio } from './pages/configuracoes-municipio.js';
+import { renderRegimeTributario } from './pages/regime-tributario-municipio.js';
+import { renderDecisoesJudiciais } from './pages/decisoes-judiciais-municipio.js';
 import { getMunSession, logoutMun, MUN_ROLES } from './auth-municipio.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -32,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
     .register('/dashboard', renderDashboardMunicipio)
     .register('/consulta-notas', renderConsultaNotasMun)
     .register('/gestao-acessos', renderGestaoAcessosMun)
+    .register('/regime-tributario', renderRegimeTributario)
+    .register('/decisoes-judiciais', renderDecisoesJudiciais)
     .register('/configuracoes', renderConfiguracoesMunicipio);
 
   router.start();
@@ -70,11 +74,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if(roleEl) roleEl.textContent = session.role;
       if(avatarEl) avatarEl.textContent = session.name.substring(0, 2).toUpperCase();
 
-      if (session.role !== MUN_ROLES.GESTOR) {
-        document.getElementById('nav-gestao-acessos')?.style.setProperty('display', 'none');
-      } else {
-        document.getElementById('nav-gestao-acessos')?.style.setProperty('display', 'flex');
-      }
+      const isGestor = session.role === MUN_ROLES.GESTOR;
+      const gestorDisplay = isGestor ? 'flex' : 'none';
+      document.getElementById('nav-gestao-acessos')?.style.setProperty('display', gestorDisplay);
+      document.getElementById('nav-regime-tributario')?.style.setProperty('display', gestorDisplay);
+      document.getElementById('nav-decisoes-judiciais')?.style.setProperty('display', gestorDisplay);
     } else {
       if (shell) shell.style.display = 'block';
       sidebar?.classList.add('hidden');

@@ -210,7 +210,38 @@ export function renderConfiguracoesMunicipio(container) {
         <h3 class="card-title">Dados Cadastrais do Município</h3>
       </div>
       <div class="card-body">
-        <input type="hidden" id="cfg-mun-nome">
+
+        <!-- Brasão + identificação principal -->
+        <div class="form-row mb-4" style="align-items:flex-start;gap:20px;">
+          <!-- Upload do Brasão -->
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;min-width:110px;">
+            <div id="brasao-preview-wrap" style="width:90px;height:90px;border:2px dashed var(--surface-glass-border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--surface-glass);">
+              <img id="brasao-preview" src="" alt="" style="max-width:86px;max-height:86px;object-fit:contain;display:none;">
+              <span id="brasao-placeholder" style="font-size:28px;">🏛️</span>
+            </div>
+            <label class="btn btn-ghost btn-sm" style="cursor:pointer;font-size:0.75rem;padding:3px 10px;">
+              📂 Carregar Brasão
+              <input type="file" id="cfg-mun-brasao-file" accept="image/*" style="display:none;">
+            </label>
+            <button class="btn btn-ghost btn-sm" id="btn-brasao-remover" style="font-size:0.72rem;padding:2px 8px;display:none;">✕ Remover</button>
+            <input type="hidden" id="cfg-mun-brasao">
+            <span class="form-help" style="text-align:center;font-size:0.7rem;">PNG/JPG/SVG recomendado</span>
+          </div>
+          <!-- Nome e Prefeitura -->
+          <div style="flex:1;display:flex;flex-direction:column;gap:12px;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Nome do Município <span class="required">*</span></label>
+              <input class="form-input" id="cfg-mun-nome" type="text" maxlength="100" placeholder="Ex: MUNICIPIO DE UTINGA - BA">
+              <span class="form-help">Usado no cabeçalho do DANFSe</span>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Nome da Prefeitura</label>
+              <input class="form-input" id="cfg-mun-prefeitura" type="text" maxlength="150" placeholder="Ex: PREFEITURA MUNICIPAL DE UTINGA - BA">
+              <span class="form-help">Linha complementar no cabeçalho do DANFSe</span>
+            </div>
+          </div>
+        </div>
+
         <div class="form-row mb-4">
           <div class="form-group">
             <label class="form-label">CNPJ do Município</label>
@@ -309,6 +340,7 @@ export function renderConfiguracoesMunicipio(container) {
     const el = (id) => document.getElementById(id);
     if (cfg.cnpj) el('cfg-mun-cnpj').value = maskCNPJ(cfg.cnpj);
     if (cfg.nome) el('cfg-mun-nome').value = cfg.nome;
+    if (cfg.prefeitura) el('cfg-mun-prefeitura').value = cfg.prefeitura;
     if (cfg.ibge) {
       el('cfg-mun-ibge').value = cfg.ibge;
       const displayEl = el('cfg-mun-ibge-display');
@@ -322,6 +354,16 @@ export function renderConfiguracoesMunicipio(container) {
     if (cfg.ambiente) el('cfg-mun-ambiente').value = cfg.ambiente;
     if (el('cfg-mun-url-adn-mun')) el('cfg-mun-url-adn-mun').value = cfg.urlAdnMun || '';
     updateAmbUrls(cfg.ambiente || 'sandbox');
+    // Brasão
+    if (cfg.brasao) {
+      el('cfg-mun-brasao').value = cfg.brasao;
+      const img = el('brasao-preview');
+      const ph  = el('brasao-placeholder');
+      const btn = el('btn-brasao-remover');
+      if (img) { img.src = cfg.brasao; img.style.display = 'block'; }
+      if (ph)  ph.style.display = 'none';
+      if (btn) btn.style.display = '';
+    }
   }
 
   function updateAmbUrls(amb) {
@@ -339,6 +381,53 @@ export function renderConfiguracoesMunicipio(container) {
 
   document.getElementById('cfg-mun-cnpj')?.addEventListener('input', (e) => {
     e.target.value = maskCNPJ(e.target.value);
+  });
+
+  // ── Upload do Brasão (com compressão automática via canvas) ────
+  document.getElementById('cfg-mun-brasao-file')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const original = new Image();
+      original.onload = () => {
+        // Redimensiona para no máximo 160×160 px mantendo proporção
+        const MAX = 160;
+        let w = original.width;
+        let h = original.height;
+        if (w > MAX || h > MAX) {
+          if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+          else        { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width  = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(original, 0, 0, w, h);
+        // PNG para brasões com fundo transparente, qualidade razoável
+        const dataUrl = canvas.toDataURL('image/png');
+        document.getElementById('cfg-mun-brasao').value = dataUrl;
+        const img = document.getElementById('brasao-preview');
+        const ph  = document.getElementById('brasao-placeholder');
+        const btn = document.getElementById('btn-brasao-remover');
+        if (img) { img.src = dataUrl; img.style.display = 'block'; }
+        if (ph)  ph.style.display = 'none';
+        if (btn) btn.style.display = '';
+      };
+      original.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById('btn-brasao-remover')?.addEventListener('click', () => {
+    document.getElementById('cfg-mun-brasao').value = '';
+    const img = document.getElementById('brasao-preview');
+    const ph  = document.getElementById('brasao-placeholder');
+    const btn = document.getElementById('btn-brasao-remover');
+    if (img) { img.src = ''; img.style.display = 'none'; }
+    if (ph)  ph.style.display = '';
+    if (btn) btn.style.display = 'none';
+    const fileInput = document.getElementById('cfg-mun-brasao-file');
+    if (fileInput) fileInput.value = '';
   });
 
   // Município: carrega lista por UF e vincula seleção
@@ -591,6 +680,8 @@ export function renderConfiguracoesMunicipio(container) {
     const payload = {
       cnpj: val('cfg-mun-cnpj'),
       nome: val('cfg-mun-nome'),
+      prefeitura: val('cfg-mun-prefeitura'),
+      brasao: document.getElementById('cfg-mun-brasao')?.value || '',
       ibge: val('cfg-mun-ibge'),
       uf: val('cfg-mun-uf').toUpperCase(),
       inscEstadual: val('cfg-mun-ie'),

@@ -445,8 +445,9 @@ export function collectDPSFormData() {
     prestCMun: val('prest-cMun'),
     prestFone: val('prest-fone'),
     prestEmail: val('prest-email'),
-    opSimpNac: '1', // default
-    regEspTrib: '0',
+    opSimpNac: val('prest-opSimpNac') || '1',
+    regEspTrib: val('prest-regEspTrib') || '0',
+    regApTribSN: val('prest-regApurSN'),
     // Tomador
     tomaTipoDoc: val('toma-tipoDoc'),
     tomaDoc: valDoc('toma-doc'),

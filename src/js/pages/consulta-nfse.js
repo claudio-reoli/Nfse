@@ -10,37 +10,180 @@ import { openDANFSe } from '../danfse-generator.js';
 
 function mapNFSeToDANFSe(nfse) {
   if (!nfse) return null;
-  const prest = nfse.emit || nfse.prestador || nfse.infDPS?.prest || {};
-  const toma = nfse.toma || nfse.tomador || nfse.infDPS?.toma || {};
-  const serv = nfse.serv || nfse.servico || nfse.infDPS?.serv || {};
-  const val = nfse.valores || nfse.infDPS?.valores || {};
-  const fmt = (v) => `R$ ${parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+  // Suporte à nova estrutura enriquecida do backend (infNFSe completo)
+  // e também à estrutura legada (dadosGerais / tributos / etc.)
+  const g     = nfse.dadosGerais || {};
+  const prest = nfse.emit        || nfse.prestador || {};
+  const toma  = nfse.toma        || nfse.tomador   || {};
+  const interm= nfse.intermediario || nfse.infDPS?.interm || null;
+  const serv  = nfse.serv        || nfse.servico   || {};
+  const val   = nfse.valores     || {};
+  const ti    = nfse.tributos?.issqn   || {};
+  const tf    = nfse.tributos?.federal || {};
+  const tt    = nfse.tributos?.totais  || {};
+
+  const endP  = prest.endereco || {};
+  const endT  = toma.endereco  || {};
+
+  // Formata CNPJ/CPF
+  const fmtDoc = (p) => {
+    const cnpj = String(p.CNPJ || p.cnpj || '').replace(/\D/g, '');
+    if (cnpj.length === 14) return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    const cpf = String(p.CPF || p.cpf || '').replace(/\D/g, '');
+    if (cpf.length === 11)  return cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+    return p.NIF || p.nif || '';
+  };
+  // Formata endereço como string
+  const fmtEnd = (e, p) => [
+    e.xLgr    || p.xLgr,
+    e.nro     || p.nro,
+    e.xCpl    || p.xCpl || (e.xLgr || p.xLgr ? 'Não Informado' : ''),
+    e.xBairro || p.xBairro,
+  ].filter(Boolean).join(', ');
+  // Formata Município - UF
+  const fmtMun = (e, p) => {
+    const m = e.xMun || p.xMun || formatMunicipioDisplaySync?.(e.cMun || p.cMun, '', '') || '';
+    const u = e.UF   || e.uf   || p.UF || p.uf || '';
+    return [m, u].filter(Boolean).join(' - ');
+  };
+  const fmtCEP = (e, p) => {
+    const raw = String(e.CEP || e.cep || p.CEP || p.cep || '').replace(/\D/g, '');
+    return raw.length === 8 ? raw.replace(/(\d{5})(\d{3})/, '$1-$2') : raw;
+  };
+
+  // Valores calculados
+  const vServ   = val.vServ   ?? 0;
+  const vBC     = val.vBC     ?? vServ;
+  const vLiq    = val.vLiq    ?? vServ;
+  const vISS    = val.vISSQN  ?? val.vISS ?? ti.vISS ?? 0;
+  const pAliq   = ti.pAliq    ?? val.pAliq ?? 0;
+  const vIRRF   = tf.vRetIRRF ?? tf.vIRRF ?? 0;
+  const vRetCP  = tf.vRetCP   ?? 0;
+  const vRetPC  = tf.vRetCSLL ?? 0;
+  const vPIS    = tf.vPis     ?? tf.vPIS   ?? val.vPis ?? 0;
+  const vCofins = tf.vCofins  ?? val.vCofins ?? 0;
+  const vTotFed = vIRRF + vRetCP + vPIS + vCofins;
+  const tpRet   = ti.tpRetISSQN || '1';
+
+  // Local de prestação — tenta código IBGE ou texto
+  const localPrest =
+    serv.xLocPrestacao ||
+    formatMunicipioDisplaySync?.(serv.cLocPrestacao || serv.cLocPrest || ti.cLocIncid, '', '') ||
+    String(serv.cLocPrestacao || serv.cLocPrest || ti.cLocIncid || '');
+
   return {
-    nNFSe: nfse.nNFSe || '—',
-    chaveAcesso: nfse.chaveAcesso || document.getElementById('result-chave')?.textContent || '—',
-    dhProc: nfse.dhProc || nfse.dhEmi || '—',
-    tpAmb: nfse.ambGer || nfse.tpAmb || '2',
-    dCompet: nfse.dCompet || nfse.dEmi || '—',
-    prest: { doc: prest.CNPJ || prest.CPF || '—', xNome: prest.xNome || '—', IM: prest.IM || '' },
-    toma: { doc: toma.CNPJ || toma.CPF || '—', xNome: toma.xNome || '—', IM: toma.IM || '' },
+    // ── Município emissor ─────────────────────────────────────
+    mun: {
+      nome:       nfse._munNome       || '',
+      prefeitura: nfse._munPrefeitura || '',
+      fone:       nfse._munFone       || '',
+      email:      nfse._munEmail      || '',
+      brasao:     nfse._munBrasao     || '',
+    },
+
+    // ── Identificação ─────────────────────────────────────────
+    nNFSe:      nfse.nNFSe  || g.nNFSe  || '',
+    chaveAcesso:nfse.chaveAcesso || document.getElementById('result-chave')?.textContent || '',
+    dCompet:    nfse.dCompet || g.dCompet || '',
+    dhNFSe:     nfse.dhNFSe || nfse.dhProc || g.dhProc || g.dhEmi || '',
+    nDPS:       nfse.nDPS   || g.nDPS   || '',
+    serie:      nfse.serie  || g.serie  || '',
+    dhDPS:      nfse.dhDPS  || g.dhEmi  || '',
+
+    // ── Prestador ────────────────────────────────────────────
+    prest: {
+      doc:       fmtDoc(prest),
+      xNome:     prest.xNome  || prest.nome  || '',
+      IM:        prest.IM     || '',
+      fone:      prest.fone   || '',
+      email:     prest.email  || '',
+      endereco:  fmtEnd(endP, prest),
+      municipio: fmtMun(endP, prest),
+      cep:       fmtCEP(endP, prest),
+      opSimpNac: prest.opSimpNac  || '',
+      regApurSN: prest.regApurSN  || prest.regApuracao || '',
+      regEspTrib:prest.regEspTrib || ti.regEspTrib || '',
+    },
+
+    // ── Tomador ───────────────────────────────────────────────
+    toma: {
+      doc:       fmtDoc(toma),
+      xNome:     toma.xNome  || toma.nome  || '',
+      IM:        toma.IM     || '',
+      fone:      toma.fone   || '',
+      email:     toma.email  || '',
+      endereco:  fmtEnd(endT, toma),
+      municipio: fmtMun(endT, toma),
+      cep:       fmtCEP(endT, toma),
+    },
+
+    // ── Intermediário ────────────────────────────────────────
+    interm: (interm && (interm.CNPJ || interm.xNome))
+      ? { doc: fmtDoc(interm), xNome: interm.xNome || '' }
+      : null,
+
+    // ── Serviço ───────────────────────────────────────────────
     serv: {
-      cTribNac: serv.cServ?.cTribNac || serv.cTribNac || '—',
-      xDescServ: serv.xDescServ || '—',
-      localPrest: String(serv.cLocPrest || nfse.cLocIncid || '').padStart(7, '0'),
+      cTribNac:   serv.cTribNac   || '',
+      cTribMun:   serv.cTribMun   || '',
+      localPrest: localPrest,
+      cPaisPrest: serv.cPaisPrestacao || '',
+      xDescServ:  serv.xDescServ  || '',
     },
-    valores: {
-      vServ: fmt(val.vServ),
-      vBC: fmt(val.vBC),
-      pAliq: `${(val.pAliq || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-      vISSQN: fmt(val.vISSQN || val.vISS),
-      vLiq: fmt(val.vLiq),
+
+    // ── Tributação Municipal ──────────────────────────────────
+    tribMun: {
+      tribISSQN:   ti.tribISSQN   || '1',
+      cPaisResult: ti.cPaisResult || '',
+      cLocIncid:   ti.cLocIncid   || localPrest,
+      regEspTrib:  prest.regEspTrib || ti.regEspTrib || '0',
+      tpImunidade: ti.tpImunidade  || '',
+      tpSusp:      ti.tpSusp  || ti.cExigSusp || '0',
+      nProcesso:   ti.nProcesso    || '',
+      nBM:         ti.nBM          || '',
+      vServ:       vServ,
+      vDescIncond: val.vDescIncond ?? 0,
+      vDedRed:     val.vDedRed     ?? val.dedRed?.vDR ?? 0,
+      vCalcBM:     val.vCalcBM     ?? 0,
+      vBC:         vBC,
+      pAliq:       pAliq,
+      tpRetISSQN:  tpRet,
+      vISSQN:      vISS,
     },
-    ibscbs: {
-      vBC: fmt(0), pAliqEfetUF: '0,10', vIBSUF: fmt(0),
-      pAliqEfetMun: '0,05', vIBSMun: fmt(0),
-      pAliqEfetCBS: '0,90', vCBS: fmt(0),
-      vIBSTot: fmt(0), vTotNF: fmt(val.vLiq || val.vServ),
+
+    // ── Tributação Federal ────────────────────────────────────
+    tribFed: {
+      vIRRF:             vIRRF,
+      vRetCP:            vRetCP,
+      vRetPisCofinsCSLL: vRetPC,
+      vPIS:              vPIS,
+      vCofins:           vCofins,
+      tpRetPisCofins:    tf.tpRetPisCofins || '',
+      vTotFed:           vTotFed,
     },
+
+    // ── Totais ────────────────────────────────────────────────
+    totais: {
+      vServ:        vServ,
+      vDescCond:    val.vDescCond  ?? 0,
+      vDescIncond:  val.vDescIncond ?? 0,
+      vISSQNRet:    (tpRet === '2' || tpRet === '3') ? vISS : 0,
+      vTribFed:     vTotFed,
+      vPisCofinsDev:vPIS + vCofins,
+      vLiq:         vLiq,
+    },
+
+    // ── Totais aproximados ────────────────────────────────────
+    totApro: {
+      vFed: tt.vTotTribFed ?? 0,
+      vEst: tt.vTotTribEst ?? 0,
+      vMun: tt.vTotTribMun ?? 0,
+    },
+
+    // ── Info complementar ─────────────────────────────────────
+    xInfComp: nfse.xInfComp || g.xInfComp || '',
+    nbs:      nfse.nbs      || serv.cNBS   || '',
   };
 }
 
@@ -69,9 +212,18 @@ export function renderConsultaNFSe(container) {
           <div class="form-row">
             <div class="form-group" style="grid-column: span 3;">
               <label class="form-label">Chave de Acesso da NFS-e (50 dígitos)</label>
-              <input class="form-input form-input-mono" id="consulta-chave" type="text" maxlength="50" 
-                     placeholder="00000000000000000000000000000000000000000000000000"
-                     style="font-size: var(--text-md); letter-spacing: 0.15em;">
+              <div style="position:relative;">
+                <input class="form-input form-input-mono" id="consulta-chave" type="text" maxlength="50"
+                       placeholder="00000000000000000000000000000000000000000000000000"
+                       style="font-size: var(--text-md); letter-spacing: 0.15em; padding-right: 32px;">
+                <button id="btn-limpar-chave" type="button" title="Limpar"
+                  style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);
+                         background:none;border:none;cursor:pointer;padding:2px 6px;
+                         font-size:13px;color:var(--color-neutral-400);line-height:1;
+                         border-radius:50%;transition:color .15s,background .15s;"
+                  onmouseover="this.style.color='var(--color-neutral-100)';this.style.background='rgba(255,255,255,.1)'"
+                  onmouseout="this.style.color='var(--color-neutral-400)';this.style.background='none'">✕</button>
+              </div>
             </div>
             <div class="form-group" style="align-self: flex-end;">
               <button class="btn btn-primary" id="btn-consultar-chave">🔍 Consultar</button>
@@ -230,6 +382,17 @@ export function renderConsultaNFSe(container) {
       document.getElementById('search-chave').classList.toggle('hidden', tab.dataset.search !== 'chave');
       document.getElementById('search-dps').classList.toggle('hidden', tab.dataset.search !== 'dps');
     });
+  });
+
+  // Botão ✕ limpar chave
+  const chaveInput  = document.getElementById('consulta-chave');
+  const btnLimpar   = document.getElementById('btn-limpar-chave');
+  chaveInput?.addEventListener('input', () => {
+    if (btnLimpar) btnLimpar.style.display = chaveInput.value ? '' : 'none';
+  });
+  btnLimpar?.addEventListener('click', () => {
+    if (chaveInput) { chaveInput.value = ''; chaveInput.focus(); }
+    if (btnLimpar)  btnLimpar.style.display = 'none';
   });
 
   // Search by chave
