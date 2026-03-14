@@ -10,7 +10,7 @@ import {
   setCertStore,
   clearCertStore,
   getCertSummary,
-  isCertificateValid,
+
 } from '../digital-signature.js';
 import { setEnvironment, setDemoMode, fetchConfigAmbiente, consultarCNPJ } from '../api-service.js';
 import { maskCNPJ, maskCEP } from '../fiscal-utils.js';

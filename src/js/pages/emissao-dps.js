@@ -70,7 +70,7 @@ export function renderEmissaoDPS(container) {
           </div>
           <div class="form-group">
             <label class="form-label">Data de Competência <span class="required">*</span></label>
-            <input class="form-input" id="dps-dCompet" type="date">
+            <input class="form-input" id="dps-dCompet" type="month">
           </div>
         </div>
 

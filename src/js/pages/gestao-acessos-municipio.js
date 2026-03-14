@@ -5,6 +5,7 @@ import { MUN_ROLES, isMunAuthorized } from '../auth-municipio.js';
 import { toast } from '../toast.js';
 import { maskCPF, maskPhone } from '../fiscal-utils.js';
 import { getBackendUrl, getUsers, cadastrarDecisaoJudicial } from '../api-service.js';
+import { getSession } from '../auth.js';
 
 const BASE_ROLES = [
   { value: 'GESTOR', label: MUN_ROLES.GESTOR },
@@ -208,8 +209,6 @@ export function renderGestaoAcessosMun(container) {
   });
 
   // ─── Regime Tributário ──────────────────────────
-  const { getSession } = await import('../auth.js').catch(() => ({ getSession: () => null }));
-
   document.getElementById('reg-cnpj')?.addEventListener('input', (e) => {
     let v = e.target.value.replace(/\D/g, '');
     if (v.length > 14) v = v.substring(0, 14);

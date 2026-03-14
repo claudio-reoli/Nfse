@@ -123,11 +123,11 @@ export function renderGuiasContribuinte(container) {
 
   document.getElementById('btn-atualizar-guias')?.addEventListener('click', loadGuias);
   document.getElementById('fechar-modal-pix')?.addEventListener('click', () => document.getElementById('modal-pix').style.display = 'none');
-  document.getElementById('btn-copiar-pix').addEventListener('click', () => {
+  document.getElementById('btn-copiar-pix')?.addEventListener('click', () => {
       navigator.clipboard.writeText(document.getElementById('pix-payload').value);
       toast.success('PIX copiado.');
   });
-  document.getElementById('btn-simular-pagamento').addEventListener('click', async () => {
+  document.getElementById('btn-simular-pagamento')?.addEventListener('click', async () => {
       try {
           const res = await fetch(`${getBackendUrl()}/municipio/pagar-guia/${lastGuideId}`, {
             method: 'POST',
