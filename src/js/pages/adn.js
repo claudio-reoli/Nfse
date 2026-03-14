@@ -13,9 +13,20 @@ export function renderADN(container) {
         <h1 class="page-title">Integração ADN</h1>
         <p class="page-description">Ambiente de Dados Nacional — Distribuição de DF-e por NSU e compartilhamento</p>
       </div>
-      <div class="page-actions">
+      <div class="page-actions" style="gap: var(--space-2); display: flex; flex-wrap: wrap;">
+        <button class="btn btn-secondary btn-sm" id="btn-probe-adn">🔍 Diagnóstico ADN</button>
+        <button class="btn btn-secondary btn-sm" id="btn-simular-import">🧪 Simular Importação</button>
         <button class="btn btn-primary" id="btn-sync-nsu">🔄 Sincronizar NSU</button>
       </div>
+    </div>
+
+    <!-- Painel de diagnóstico (oculto inicialmente) -->
+    <div class="card animate-slide-up mb-4" id="card-diagnostico" style="display:none; border: 1px solid var(--color-warning-400);">
+      <div class="card-header" style="background: rgba(var(--color-warning-rgb,245,158,11),0.08);">
+        <h3 class="card-title">🔍 Resultado do Diagnóstico ADN</h3>
+        <button class="btn btn-ghost btn-sm" id="btn-close-diag">✕ Fechar</button>
+      </div>
+      <div class="card-body" id="diag-body" style="font-family: var(--font-mono); font-size: var(--text-xs); white-space: pre-wrap; max-height: 400px; overflow-y: auto;"></div>
     </div>
 
     <!-- NSU Status -->
@@ -36,6 +47,9 @@ export function renderADN(container) {
         <div class="stat-trend trend-down">A processar</div>
       </div>
     </div>
+
+    <!-- Sync result message -->
+    <div id="sync-result-msg" style="display:none; margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); font-size: var(--text-sm); border: 1px solid;"></div>
 
     <!-- Documents Table -->
     <div class="card animate-slide-up">
@@ -91,14 +105,107 @@ export function renderADN(container) {
             <div style="font-weight: 600; color: var(--color-accent-400); margin-bottom: var(--space-2);">ADN Municípios</div>
             <div style="font-size: var(--text-xs); color: var(--color-neutral-400); font-family: var(--font-mono);">
               GET /DFe/{NSU}<br>
-              GET /DFe (último NSU)<br>
+              GET /DFe?ultNsu={NSU}<br>
               POST /Eventos (manutenção)
             </div>
           </div>
         </div>
+        <div style="margin-top: var(--space-3); padding: var(--space-3); background: rgba(245,158,11,0.08); border-radius: var(--radius-md); border: 1px solid rgba(245,158,11,0.3); font-size: var(--text-xs); color: var(--color-neutral-300);">
+          <strong>💡 Dica:</strong> Se a sincronização retornar erro 404, use <strong>🔍 Diagnóstico ADN</strong> para verificar quais endpoints respondem com o certificado municipal.
+          Se o município ainda não está cadastrado no ADN, use <strong>🧪 Simular Importação</strong> para gerar notas de teste e validar o fluxo completo (apuração, guias, eventos).
+        </div>
       </div>
     </div>
   `;
+
+  function showSyncResult(msg, type = 'info') {
+    const el = document.getElementById('sync-result-msg');
+    if (!el) return;
+    const colors = {
+      success: { bg: 'rgba(34,197,94,0.1)', border: 'var(--color-success-400)', text: 'var(--color-success-300)' },
+      error:   { bg: 'rgba(239,68,68,0.1)',  border: 'var(--color-danger-400)',  text: 'var(--color-danger-300)' },
+      info:    { bg: 'rgba(59,130,246,0.1)',  border: 'var(--color-primary-400)', text: 'var(--color-primary-200)' },
+    };
+    const c = colors[type] || colors.info;
+    el.style.display = 'block';
+    el.style.background = c.bg;
+    el.style.borderColor = c.border;
+    el.style.color = c.text;
+    el.textContent = msg;
+  }
+
+  // ─── Diagnóstico ADN ─────────────────────────────────────────
+  document.getElementById('btn-probe-adn')?.addEventListener('click', async () => {
+    const card = document.getElementById('card-diagnostico');
+    const body = document.getElementById('diag-body');
+    if (card) card.style.display = 'block';
+    if (body) body.textContent = '⏳ Testando conectividade com ADN (pode levar até 30s)...';
+    toast.info('Iniciando diagnóstico ADN...');
+    try {
+      const res = await fetch('/api/admin/probe-adn');
+      const data = await res.json();
+      if (data.erro) {
+        if (body) body.textContent = `❌ Erro: ${data.erro}`;
+        toast.error('Falha no diagnóstico: ' + data.erro);
+        return;
+      }
+      let txt = `Ambiente: ${data.ambiente}\nURL Base: ${data.adnBaseUrl}\nCertificado: ${data.certOk ? '✓ Configurado' : '✗ NÃO configurado'}\nSubject: ${data.certSubject}\n\n`;
+      txt += `━━━━ RESULTADOS POR URL ━━━━\n`;
+      for (const r of (data.results || [])) {
+        const icon = r.status && r.status < 400 ? '✅' : r.status === 404 ? '🔴' : r.status ? '🟡' : '⚫';
+        txt += `${icon} [${r.status ?? r.erro ?? '?'}] ${r.label}\n   ${r.url}\n`;
+        if (r.body) txt += `   Resposta: ${r.body.substring(0, 150).replace(/\n/g, ' ')}\n`;
+        txt += '\n';
+      }
+      const respondendo = (data.results || []).filter(r => r.status && r.status < 500);
+      if (respondendo.length === 0) {
+        txt += `\n⚠️  DIAGNÓSTICO: Nenhum endpoint respondeu com sucesso.\n   Verifique se o município está cadastrado no ADN e se o certificado ICP-Brasil é do tipo e-CNPJ A1.\n`;
+      } else {
+        const ok = respondendo.filter(r => r.status < 400);
+        if (ok.length > 0) {
+          txt += `\n✅  ENDPOINTS OK: ${ok.map(r => r.url).join(', ')}\n`;
+        } else {
+          txt += `\n⚠️  SERVIDOR RESPONDEU mas todos retornaram erro. Status encontrados: ${[...new Set(respondendo.map(r => r.status))].join(', ')}\n`;
+        }
+      }
+      if (body) body.textContent = txt;
+      toast.success('Diagnóstico concluído!');
+    } catch (err) {
+      if (body) body.textContent = `❌ Erro na requisição: ${err.message}`;
+      toast.error('Falha: ' + err.message);
+    }
+  });
+
+  document.getElementById('btn-close-diag')?.addEventListener('click', () => {
+    const card = document.getElementById('card-diagnostico');
+    if (card) card.style.display = 'none';
+  });
+
+  // ─── Simular Importação (modo demonstração) ──────────────────
+  document.getElementById('btn-simular-import')?.addEventListener('click', async () => {
+    const qtd = prompt('Quantas notas sintéticas gerar? (máx 50)', '10');
+    if (qtd === null) return;
+    const n = parseInt(qtd, 10);
+    if (!n || n < 1) { toast.error('Quantidade inválida'); return; }
+    toast.info(`Gerando ${n} notas de simulação...`);
+    try {
+      const res = await fetch('/api/admin/simular-importacao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantidade: n }),
+      });
+      const data = await res.json();
+      if (data.sucesso) {
+        document.getElementById('adn-ultNSU').textContent = data.maxNsu.toLocaleString('pt-BR');
+        showSyncResult(`✅ ${data.novaNotas} nota(s) de simulação importada(s). NSU atual: ${data.maxNsu}. Acesse "Consulta de Notas" para visualizá-las.`, 'success');
+        toast.success(`${data.novaNotas} notas simuladas importadas!`);
+      } else {
+        toast.error(data.erro || 'Erro na simulação');
+      }
+    } catch (err) {
+      toast.error('Falha: ' + err.message);
+    }
+  });
 
   // ─── Sync NSU / Importar do ADN ───────────────────────────────
   document.getElementById('btn-sync-nsu')?.addEventListener('click', async () => {
@@ -121,16 +228,26 @@ export function renderADN(container) {
       }
       return;
     }
-    toast.info('Consultando último NSU no ADN...');
+    toast.info('Consultando status de sincronização...');
     try {
-      const response = await safeFetch(ultimoNSU);
-      if (response.ok) {
-        document.getElementById('adn-ultNSU').textContent = response.data.ultNSU?.toLocaleString('pt-BR') ?? '—';
-        document.getElementById('adn-maxNSU').textContent = response.data.maxNSU?.toLocaleString('pt-BR') ?? '—';
-        document.getElementById('adn-pending').textContent = ((response.data.maxNSU || 0) - (response.data.ultNSU || 0)).toLocaleString('pt-BR');
-        toast.success(`✅ NSU atualizado! Faça login com certificado para importar notas.`);
+      const res = await fetch('/api/admin/force-sync', { method: 'POST' });
+      const data = await res.json();
+      document.getElementById('adn-ultNSU').textContent = (data.maxNsu ?? '—').toLocaleString?.('pt-BR') ?? data.maxNsu ?? '—';
+      if (data.novaNotas > 0) {
+        showSyncResult(`✅ ${data.novaNotas} nota(s) importada(s) do ADN. NSU atual: ${data.maxNsu}`, 'success');
+        toast.success(`${data.novaNotas} notas importadas!`);
+      } else if (data.aviso) {
+        showSyncResult(`⚠️ ${data.aviso}`, 'info');
+        toast.info('Sem novas notas: ' + (data.aviso || '').substring(0, 80));
+      } else if (data.erro) {
+        showSyncResult(`❌ ${data.erro}\n\n💡 Use "🔍 Diagnóstico ADN" para investigar ou "🧪 Simular Importação" para testes.`, 'error');
+        toast.error('ADN indisponível — veja detalhes na tela');
+      } else {
+        showSyncResult(`ℹ️ Nenhuma nota nova. NSU: ${data.maxNsu}`, 'info');
+        toast.info('Sem novas notas no ADN.');
       }
     } catch (err) {
+      showSyncResult(`❌ Erro de comunicação: ${err.message}`, 'error');
       toast.error(`Falha: ${err.message}`);
     }
   });

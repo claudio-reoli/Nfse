@@ -629,20 +629,26 @@ async function syncNfsFromAdn() {
   // URLs: ACBr/gov.br indicam adn.../dfe na RAIZ. Doc também cita municipios/DFe.
   const baseMun = adnBaseUrl.replace(/\/$/, '');
   const baseRoot = baseMun.replace(/\/(municipios|contribuintes|dfe|DFe)\/?$/, '') || baseMun;
+  const nsuStr = String(ultNSU).padStart(15, '0');  // NSU pode exigir padding (15 dígitos conforme NF-e)
 
   const urlsToTry = [
-    `${baseRoot}/dfe/${ultNSU}`,                                   // ACBr: adn.../dfe (raiz) — tentar primeiro
-    `${baseRoot}/DFe/${ultNSU}`,                                   // Raiz maiúsculo
-    `${baseRoot}/municipios/dfe/${ultNSU}`,                         // municipios/dfe
-    `${baseRoot}/municipios/DFe/${ultNSU}`,                         // Doc: municipios/DFe
-    `${baseMun}/DFe/${ultNSU}`,                                     // Override já com path
-    `${baseMun}/dfe/${ultNSU}`,
+    `${baseMun}/DFe/${ultNSU}`,                                     // Doc: municipios/DFe/{NSU} — tentar primeiro
+    `${baseMun}/DFe?ultNsu=${ultNSU}`,                              // Query param variant
+    `${baseMun}/dfe/${ultNSU}`,                                     // Case-insensitive variant
+    `${baseMun}/DFe/${nsuStr}`,                                     // NSU com padding 15 dígitos
+    `${baseMun}/DFe?ultNsu=${nsuStr}`,                              // Query param com padding
+    `${baseRoot}/municipios/DFe/${ultNSU}`,                         // Raiz + municipios
+    `${baseRoot}/dfe/${ultNSU}`,                                    // ACBr: raiz/dfe
+    `${baseRoot}/DFe/${ultNSU}`,                                    // Raiz maiúsculo
+    `${baseMun}/v1/DFe/${ultNSU}`,                                  // Versão /v1/
+    `${baseMun}/api/DFe/${ultNSU}`,                                 // /api/ prefix
     `${baseRoot}/api/dfe/${ultNSU}`,
     (AMBIENTES[ambiente === 'sandbox' ? 'production' : 'sandbox']?.adnMun || baseRoot).replace(/\/$/, '') + `/DFe/${ultNSU}`,
   ].filter((u, i, a) => a.indexOf(u) === i);
 
   let response = null;
   let lastError = null;
+  const urlResults = [];  // Diagnóstico: registra status de cada URL tentada
 
   const reqHeaders = {
     'Accept': 'application/json',
@@ -653,29 +659,61 @@ async function syncNfsFromAdn() {
   for (const adnUrl of urlsToTry) {
     console.log(`[ ADN Worker ] GET ${adnUrl}`);
     try {
-      response = await axios({
+      const r = await axios({
         method: 'GET',
         url: adnUrl,
         httpsAgent: agent,
         headers: reqHeaders,
-        timeout: 20000
+        timeout: 20000,
+        validateStatus: () => true,  // Nunca lança erro por status HTTP — analisa corpo manualmente
       });
-      break;
-    } catch (err) {
-      lastError = err;
-      if (err.response?.status === 404) {
-        console.warn(`[ ADN Worker ] 404, tentando próxima URL...`);
+
+      const body = r.data;
+      // ADN retorna HTTP 404 para "sem documentos" com JSON válido — isso é resposta normal, não erro de rota
+      const isAdnJson = body && typeof body === 'object' && (
+        body.LoteDFe !== undefined ||
+        body.StatusProcessamento !== undefined ||
+        body.resDFe !== undefined ||
+        body.docsFiscais !== undefined
+      );
+
+      if (r.status === 200 || (r.status < 300) || isAdnJson) {
+        // Resposta válida (com ou sem documentos)
+        const nota404 = r.status === 404 ? ' (HTTP 404 — ADN sinaliza "sem documentos")' : '';
+        urlResults.push({ url: adnUrl, status: r.status, ok: true, nota: isAdnJson ? `JSON ADN${nota404}` : '' });
+        console.log(`[ ADN Worker ] ✓ Resposta válida de ${adnUrl} [HTTP ${r.status}]${nota404}`);
+        response = r;
+        break;
+      } else {
+        urlResults.push({ url: adnUrl, status: r.status, ok: false });
+        console.warn(`[ ADN Worker ] HTTP ${r.status} em ${adnUrl} (sem JSON ADN válido), tentando próxima URL...`);
+        lastError = { message: `HTTP ${r.status}`, response: r };
         continue;
       }
-      throw err;
+    } catch (err) {
+      // Erro de rede/TLS (sem resposta HTTP)
+      const errCode = err.code || err.message?.substring(0, 50);
+      urlResults.push({ url: adnUrl, status: errCode, ok: false });
+      lastError = err;
+      console.warn(`[ ADN Worker ] Erro de rede ${errCode} em ${adnUrl}`);
+      continue;
     }
   }
 
-  if (!response) {
-    throw lastError;
+  // Log de diagnóstico das URLs tentadas
+  console.log(`[ ADN Worker ] Resultados das URLs tentadas:`);
+  for (const r of urlResults) {
+    console.log(`  ${r.ok ? '✓' : '✗'} [${r.status}] ${r.url}`);
   }
 
   try {
+    if (!response) {
+      // Todas as URLs falharam — lança o último erro para o catch abaixo tratá-lo adequadamente
+      const errDiag = new Error(`Todas as ${urlResults.length} URLs tentadas falharam. Último erro: ${lastError?.message}`);
+      errDiag.response = lastError?.response;
+      errDiag._urlResults = urlResults;
+      throw errDiag;
+    }
 
     const payload = response.data;
     const respStatus = payload.StatusProcessamento || payload.cStat || response.status;
@@ -712,12 +750,16 @@ async function syncNfsFromAdn() {
     }
 
     if (!Array.isArray(docs) || docs.length === 0) {
-      console.log('[ ADN Worker ] Nenhum documento novo retornado pela ADN.');
+      const semDocs = respStatus === 'NENHUM_DOCUMENTO_LOCALIZADO' || payload.Erros?.some(e => e.Codigo === 'E2020');
+      console.log(`[ ADN Worker ] Nenhum documento novo retornado pela ADN. (${semDocs ? 'município sem NFS-e no ADN ainda' : respStatus})`);
       const maxNsuRet = payload.maxNSU ?? payload.MaxNSU ?? maxNsu;
       if (maxNsuRet === maxNsu) {
         await db.setLastEmptySyncAt();
       }
-      return { maxNsu, novaNotas: 0, fonte: 'ADN', resposta: respStatus };
+      const aviso = semDocs
+        ? 'Município autenticado no ADN, mas sem NFS-e distribuídas ainda. Aguarde emissão de notas ou use "Simular Importação" para testes.'
+        : undefined;
+      return { maxNsu, novaNotas: 0, fonte: 'ADN', resposta: respStatus, ...(aviso ? { aviso } : {}) };
     }
 
     await db.clearLastEmptySyncAt();
@@ -784,30 +826,37 @@ async function syncNfsFromAdn() {
   } catch (error) {
     const status = error.response?.status;
     const respData = error.response?.data;
+    const diagUrls = error._urlResults || urlResults || [];
     const msg = respData?.xMotivo || respData?.error || respData?.message || error.message;
-    console.warn(`[ ADN Worker ] API ADN indisponível (${status || 'timeout'}): ${msg}`);
+    console.warn(`[ ADN Worker ] API ADN indisponível (${status || 'N/A'}): ${msg}`);
     if (respData) console.warn(`[ ADN Worker ] Resposta completa:`, JSON.stringify(respData).substring(0, 500));
     console.log('[ ADN Worker ] Nenhuma nota importada nesta tentativa.');
 
     const ambLabel = ambiente === 'production' ? 'Produção' : 'Produção Restrita (Sandbox)';
-    let erroMsg = `HTTP ${status || '?'}: ${msg}`;
-    if (status === 404) {
-      const certOk = fsSync.existsSync(MUN_CERT_PATH) || (fsSync.existsSync(MUN_KEY_PEM_PATH) && fsSync.existsSync(MUN_CERT_PEM_PATH));
-      erroMsg += ` Ambiente: ${ambLabel}. Verifique: (1) Certificado ICP-Brasil em Configurações > Certificado; (2) Em Configurações, use "URL ADN Municípios (override)" se tiver URL alternativa da documentação oficial.`;
-      if (!certOk) {
-        erroMsg = `HTTP 404 (${ambLabel}): Certificado municipal não configurado. Envie o certificado ICP-Brasil da Prefeitura em Configurações > Certificado. A API ADN exige mTLS.`;
-      }
-    }
-
+    const certOk = fsSync.existsSync(MUN_KEY_PEM_PATH) && fsSync.existsSync(MUN_CERT_PEM_PATH);
     const currentMax = await db.getMaxNsu();
 
-    // Modo fallback: se ADN_SKIP_404=1, retorna sucesso com 0 notas em vez de erro (permite usar o sistema com dados locais)
-    if (status === 404 && process.env.ADN_SKIP_404 === '1') {
-      console.log('[ ADN Worker ] ADN_SKIP_404=1: retornando sucesso sem importar (API indisponível).');
-      return { maxNsu: currentMax, novaNotas: 0, fonte: 'adn_indisponivel', aviso: erroMsg };
+    // Diagnóstico detalhado — inclui quais URLs foram tentadas e seus status
+    const diagSummary = diagUrls.length > 0
+      ? ` URLs tentadas: ${diagUrls.map(r => `[${r.status}] ${r.url.replace(/.*\/(municipios|contribuintes)/, '...')}`).join(', ')}.`
+      : '';
+
+    let erroMsg;
+    if (!certOk) {
+      erroMsg = `ADN 404 (${ambLabel}): Certificado municipal não configurado. Envie o certificado ICP-Brasil da Prefeitura em Configurações > Certificado.`;
+    } else if (diagUrls.every(r => r.status === 404 || r.status === '404')) {
+      erroMsg = `ADN indisponível (${ambLabel}): O servidor retornou 404 em todas as ${diagUrls.length} URLs tentadas.${diagSummary} Possíveis causas: (1) Município não cadastrado no ADN; (2) URL base incorreta — use "URL ADN Municípios (override)" em Configurações; (3) API ainda não disponível neste ambiente. Use o Modo Simulação para testes.`;
+    } else {
+      erroMsg = `ADN erro ${status || '?'} (${ambLabel}): ${msg}.${diagSummary}`;
     }
 
-    return { maxNsu: currentMax, novaNotas: 0, fonte: 'erro', erro: erroMsg };
+    // Modo fallback: ADN_SKIP_404=1 retorna sucesso silencioso (permite usar sistema com dados locais)
+    if (process.env.ADN_SKIP_404 === '1') {
+      console.log('[ ADN Worker ] ADN_SKIP_404=1: retornando sucesso sem importar (API indisponível).');
+      return { maxNsu: currentMax, novaNotas: 0, fonte: 'adn_indisponivel', aviso: erroMsg, diagnostico: diagUrls };
+    }
+
+    return { maxNsu: currentMax, novaNotas: 0, fonte: 'erro', erro: erroMsg, diagnostico: diagUrls };
   }
 }
 
@@ -1546,8 +1595,157 @@ function loadMunCertAgent() {
 // ==========================================
 
 app.post('/api/admin/force-sync', async (req, res) => {
-  const result = await syncNfsFromAdn();
-  res.json({ sucesso: true, ...result });
+  try {
+    const result = await syncNfsFromAdn();
+    res.json({ sucesso: true, ...result });
+  } catch (err) {
+    console.error('[ force-sync ] Erro não tratado:', err.message);
+    res.status(500).json({ sucesso: false, fonte: 'erro', erro: err.message });
+  }
+});
+
+// Diagnóstico ADN — testa cada URL e retorna status detalhado (usa certificado armazenado)
+app.get('/api/admin/probe-adn', async (req, res) => {
+  try {
+    const config = await db.getConfig();
+    const ambiente = config.ambiente || 'sandbox';
+    const adnBaseUrl = (config.urlAdnMun || process.env.ADN_MUN_URL || AMBIENTES[ambiente]?.adnMun)?.trim() || AMBIENTES[ambiente]?.adnMun;
+    const agent = loadMunCertAgent();
+    const certOk = fsSync.existsSync(MUN_KEY_PEM_PATH) && fsSync.existsSync(MUN_CERT_PEM_PATH);
+
+    if (!adnBaseUrl) {
+      return res.json({ erro: 'URL ADN não configurada.', certOk });
+    }
+
+    const baseMun = adnBaseUrl.replace(/\/$/, '');
+    const baseRoot = baseMun.replace(/\/(municipios|contribuintes|dfe|DFe)\/?$/, '') || baseMun;
+
+    // Tenta várias URLs e coleta resultado completo de cada uma
+    const probeTargets = [
+      { label: 'Swagger/OpenAPI spec', url: `${baseMun}/v3/api-docs` },
+      { label: 'Swagger UI HTML', url: `${baseMun}/docs/index.html` },
+      { label: 'Root municipios', url: `${baseMun}/` },
+      { label: 'DFe NSU=0', url: `${baseMun}/DFe/0` },
+      { label: 'DFe NSU query', url: `${baseMun}/DFe?ultNsu=0` },
+      { label: 'DFe NSU=1', url: `${baseMun}/DFe/1` },
+      { label: 'dfe raiz NSU=0', url: `${baseRoot}/dfe/0` },
+      { label: 'DFe raiz NSU=0', url: `${baseRoot}/DFe/0` },
+      { label: 'municipios/DFe NSU=0', url: `${baseRoot}/municipios/DFe/0` },
+    ];
+
+    const results = [];
+    for (const target of probeTargets) {
+      try {
+        const r = await axios({
+          method: 'GET',
+          url: target.url,
+          httpsAgent: agent,
+          headers: { Accept: 'application/json, text/html, */*', 'User-Agent': 'Freire-NFSe/1.0 Probe' },
+          timeout: 10000,
+          validateStatus: () => true,  // não jogar erro em qualquer status HTTP
+        });
+        const bodySnippet = typeof r.data === 'string'
+          ? r.data.substring(0, 300)
+          : JSON.stringify(r.data).substring(0, 300);
+        results.push({ label: target.label, url: target.url, status: r.status, body: bodySnippet });
+      } catch (err) {
+        results.push({ label: target.label, url: target.url, status: null, erro: err.code || err.message?.substring(0, 100) });
+      }
+    }
+
+    res.json({
+      ambiente,
+      adnBaseUrl,
+      certOk,
+      certSubject: config.certSubject || 'N/A',
+      results,
+    });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// Simulação ADN — importa notas sintéticas para teste quando ADN real não está disponível
+app.post('/api/admin/simular-importacao', async (req, res) => {
+  try {
+    const config = await db.getConfig();
+    const IBGE_MUNICIPIO = config.ibge || '0000000';
+    const qtd = Math.min(Number(req.body?.quantidade) || 10, 50);
+    const { chaves: existingChaves, nsus: existingNsus } = await db.existingChavesAndNsus();
+    const currentMaxNsu = await db.getMaxNsu();
+
+    const servicos = ['01.01.01', '01.02.01', '01.04.01', '02.01.01', '07.01.01', '14.01.00', '17.06.00'];
+    const cnpjs = ['11222333000181', '22333444000195', '33444555000107', '44555666000140', '55666777000160'];
+    const nomes = ['Consultoria XYZ Ltda', 'Tech Solutions SA', 'Serviços Prestados ME', 'Empresa Demo Ltda', 'Consultores Associados'];
+
+    let salvos = 0;
+    const notasGeradas = [];
+    for (let i = 0; i < qtd; i++) {
+      const nsu = currentMaxNsu + i + 1;
+      const cnpjIdx = i % cnpjs.length;
+      const cnpjPrest = cnpjs[cnpjIdx];
+      const servIdx = i % servicos.length;
+      const vServico = parseFloat((Math.random() * 9000 + 1000).toFixed(2));
+      const vIss = parseFloat((vServico * 0.05).toFixed(2));
+      const dataComp = new Date();
+      dataComp.setDate(dataComp.getDate() - Math.floor(Math.random() * 30));
+      const anoMes = `${dataComp.getFullYear()}-${String(dataComp.getMonth() + 1).padStart(2, '0')}`;
+      const chaveAcesso = `${IBGE_MUNICIPIO}${cnpjPrest}${String(nsu).padStart(9, '0')}`;
+
+      if (existingChaves.has(chaveAcesso) || existingNsus.has(nsu)) continue;
+
+      // Formato compatível com insertNota (campos aninhados como o parseNfseFromAdn gera)
+      const nota = {
+        nsu,
+        chaveAcesso,
+        tipoDocumento: 'NFSE',
+        fonte: 'simulacao',
+        competencia: anoMes,
+        status: 'Ativa',
+        dadosGerais: {
+          cStat: '100',
+          cLocIncid: IBGE_MUNICIPIO,
+          dhEmi: dataComp.toISOString(),
+          dCompet: `${anoMes}-01`,
+          simulado: true,
+        },
+        prestador: {
+          CNPJ: cnpjPrest,
+          xNome: nomes[cnpjIdx],
+        },
+        tomador: {
+          CNPJ: config.cnpj || '00000000000000',
+          xNome: config.nome || 'TOMADOR DEMO',
+        },
+        valores: {
+          vServ: vServico,
+          vBC: vServico,
+          vLiq: vServico - vIss,
+          vISS: vIss,
+          pAliq: 5,
+        },
+        servico: {
+          cServ: servicos[servIdx],
+          xDescServ: `Serviço de simulação — código ${servicos[servIdx]}`,
+        },
+      };
+
+      await db.insertNota(nota);
+      existingChaves.add(chaveAcesso);
+      existingNsus.add(nsu);
+      salvos++;
+      notasGeradas.push({ nsu, chaveAcesso, cnpjPrestador: cnpjPrest, vServico });
+    }
+
+    const newMax = currentMaxNsu + qtd;
+    await db.updateMaxNsu(newMax);
+
+    console.log(`[ Simulação ] ${salvos} notas sintéticas importadas para teste.`);
+    res.json({ sucesso: true, novaNotas: salvos, maxNsu: newMax, notas: notasGeradas });
+  } catch (err) {
+    console.error('[ Simulação ] Erro:', err.message);
+    res.status(500).json({ erro: err.message });
+  }
 });
 
 app.post('/api/admin/force-apuracao', async (req, res) => {
