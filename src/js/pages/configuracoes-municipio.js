@@ -17,6 +17,19 @@ import { maskCNPJ } from '../fiscal-utils.js';
 
 const MUN_CERT_STORE_KEY = 'nfse_mun_cert';
 
+/** Retorna o token JWT da sessão ativa (município usa nfse_session, igual ao contribuinte) */
+function getMunToken() {
+  try {
+    const s = localStorage.getItem('nfse_session');
+    return s ? (JSON.parse(s).token || '') : '';
+  } catch { return ''; }
+}
+
+/** Headers padrão com autenticação para chamadas ao backend */
+function authHeaders(extra = {}) {
+  return { 'Authorization': `Bearer ${getMunToken()}`, ...extra };
+}
+
 function loadLocalCert() {
   try { return JSON.parse(localStorage.getItem(MUN_CERT_STORE_KEY)) || null; } catch { return null; }
 }
@@ -118,16 +131,20 @@ function validateMunCertificate(cfg) {
 }
 
 async function fetchConfig() {
-  const res = await fetch(`${getBackendUrl()}/municipio/config`);
+  const res = await fetch(`${getBackendUrl()}/municipio/config`, {
+    headers: authHeaders()
+  });
+  if (!res.ok) throw new Error(`Erro ao carregar configurações (HTTP ${res.status})`);
   return res.json();
 }
 
 async function saveConfig(data) {
   const res = await fetch(`${getBackendUrl()}/municipio/config`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(data)
   });
+  if (!res.ok) throw new Error(`Erro ao salvar configurações (HTTP ${res.status})`);
   return res.json();
 }
 
@@ -525,14 +542,18 @@ export function renderConfiguracoesMunicipio(container) {
         certIssuer: certData.issuer || '',
       };
 
-      await fetch(`${getBackendUrl()}/municipio/upload-cert`, {
+      const uploadRes = await fetch(`${getBackendUrl()}/municipio/upload-cert`, {
         method: 'POST',
-        headers: {
+        headers: authHeaders({
           'Content-Type': 'application/octet-stream',
           'X-Cert-Passphrase': senha
-        },
+        }),
         body: new Uint8Array(buffer)
       });
+      if (!uploadRes.ok) {
+        const errData = await uploadRes.json().catch(() => ({}));
+        throw new Error(errData.error || `Upload falhou (HTTP ${uploadRes.status})`);
+      }
 
       const result = await saveConfig(certPayload);
       if (result.sucesso) {

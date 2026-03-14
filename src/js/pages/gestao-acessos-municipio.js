@@ -7,6 +7,13 @@ import { maskCPF, maskPhone } from '../fiscal-utils.js';
 import { getBackendUrl, getUsers, cadastrarDecisaoJudicial } from '../api-service.js';
 import { getSession } from '../auth.js';
 
+function getMunToken() {
+  try { const s = localStorage.getItem('nfse_session'); return s ? (JSON.parse(s).token || '') : ''; } catch { return ''; }
+}
+function authH(extra = {}) {
+  return { 'Authorization': `Bearer ${getMunToken()}`, ...extra };
+}
+
 const BASE_ROLES = [
   { value: 'GESTOR', label: MUN_ROLES.GESTOR },
   { value: 'FISCAL', label: MUN_ROLES.FISCAL },
@@ -370,7 +377,7 @@ export function renderGestaoAcessosMun(container) {
     try {
       await fetch(`${getBackendUrl()}/users/${encodeURIComponent(cpf)}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authH({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ status: newStatus })
       });
       toast.success(`Servidor ${newStatus === 'Ativo' ? 'reativado' : 'suspenso'} com sucesso.`);
@@ -403,7 +410,7 @@ export function renderGestaoAcessosMun(container) {
     try {
       const resp = await fetch(`${getBackendUrl()}/users`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authH({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ cpf, name, email, celular, role, userType: 'municipio', password: '12345678' })
       });
       const data = await resp.json();
@@ -436,7 +443,7 @@ export function renderGestaoAcessosMun(container) {
     try {
       const resp = await fetch(`${getBackendUrl()}/users/${encodeURIComponent(cpf)}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authH({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ email, celular })
       });
       if (resp.ok) {

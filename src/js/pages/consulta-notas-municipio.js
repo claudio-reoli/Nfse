@@ -3,6 +3,10 @@
  */
 import { getBackendUrl } from '../api-service.js';
 import { toast } from '../toast.js';
+
+function getMunToken() {
+  try { const s = localStorage.getItem('nfse_session'); return s ? (JSON.parse(s).token || '') : ''; } catch { return ''; }
+}
 import { formatMunicipioDisplaySync, formatEnderecoMunicipio, formatEstrangeiroDisplay } from '../municipios-ibge.js';
 
 const fmtCNPJ = (v) => { if (!v || v.length < 14) return v || '—'; return v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5"); };
@@ -214,7 +218,9 @@ export function renderConsultaNotasMun(container) {
 
   async function loadNotas() {
     try {
-      const response = await fetch(`${getBackendUrl()}/municipio/notas`);
+      const response = await fetch(`${getBackendUrl()}/municipio/notas`, {
+        headers: { 'Authorization': `Bearer ${getMunToken()}` }
+      });
       const data = await response.json();
       if (!data.sucesso || data.notas.length === 0) { renderNotasTable([]); return; }
       localNotasData = data.notas;
