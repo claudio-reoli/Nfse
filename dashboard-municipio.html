@@ -10,6 +10,8 @@
   <link rel="stylesheet" href="src/css/design-system.css">
   <link rel="stylesheet" href="src/css/layout.css">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <!-- Chart.js — biblioteca de gráficos para o Painel de Inteligência Fiscal -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
 </head>
@@ -39,6 +41,16 @@
           <span class="nav-item-text">Notas Importadas (ADN)</span>
         </button>
 
+        <button class="nav-item" data-route="/pgdas-monitor" id="nav-pgdas-monitor">
+          <span class="nav-item-icon">📅</span>
+          <span class="nav-item-text">Monitor PGDAS-D</span>
+        </button>
+
+        <button class="nav-item" data-route="/pgdas-apuracao" id="nav-pgdas-apuracao">
+          <span class="nav-item-icon">🔄</span>
+          <span class="nav-item-text">Apuração PGDAS-D</span>
+        </button>
+
         <div class="sidebar-section-label">Sistema Administrativo</div>
 
         <button class="nav-item" data-route="/gestao-acessos" id="nav-gestao-acessos">
@@ -59,6 +71,33 @@
         <button class="nav-item" data-route="/configuracoes" id="nav-configuracoes">
           <span class="nav-item-icon">⚙️</span>
           <span class="nav-item-text">Configurações</span>
+        </button>
+
+        <div class="sidebar-section-label" id="label-inteligencia">🧠 Inteligência Fiscal</div>
+
+        <button class="nav-item" data-route="/ia-dashboard" id="nav-ia-dashboard">
+          <span class="nav-item-icon">📈</span>
+          <span class="nav-item-text">Dashboard Estratégico</span>
+        </button>
+
+        <button class="nav-item" data-route="/ia-risco" id="nav-ia-risco">
+          <span class="nav-item-icon">🌡️</span>
+          <span class="nav-item-text">Gestão de Risco</span>
+        </button>
+
+        <button class="nav-item" data-route="/ia-malha" id="nav-ia-malha">
+          <span class="nav-item-icon">🔍</span>
+          <span class="nav-item-text">Malha Fiscal Digital</span>
+        </button>
+
+        <button class="nav-item" data-route="/ia-reforma" id="nav-ia-reforma">
+          <span class="nav-item-icon">⚖️</span>
+          <span class="nav-item-text">Impacto da Reforma</span>
+        </button>
+
+        <button class="nav-item" data-route="/ia-config" id="nav-ia-config">
+          <span class="nav-item-icon">🤖</span>
+          <span class="nav-item-text">Config. de IA</span>
         </button>
       </nav>
 

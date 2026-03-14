@@ -225,17 +225,17 @@ export function renderConfiguracoesMunicipio(container) {
             </label>
             <button class="btn btn-ghost btn-sm" id="btn-brasao-remover" style="font-size:0.72rem;padding:2px 8px;display:none;">✕ Remover</button>
             <input type="hidden" id="cfg-mun-brasao">
-            <span class="form-help" style="text-align:center;font-size:0.7rem;">PNG/JPG/SVG recomendado</span>
+            <span class="form-help" style="text-align:center;font-size:0.7rem;">PNG/JPG/SVG — <span class="required">*</span> Obrigatório</span>
           </div>
           <!-- Nome e Prefeitura -->
           <div style="flex:1;display:flex;flex-direction:column;gap:12px;">
             <div class="form-group" style="margin:0;">
-              <label class="form-label">Nome do Município <span class="required">*</span></label>
+              <label class="form-label">Ente Federativo <span class="required">*</span></label>
               <input class="form-input" id="cfg-mun-nome" type="text" maxlength="100" placeholder="Ex: MUNICIPIO DE UTINGA - BA">
               <span class="form-help">Usado no cabeçalho do DANFSe</span>
             </div>
             <div class="form-group" style="margin:0;">
-              <label class="form-label">Nome da Prefeitura</label>
+              <label class="form-label">Entidade <span class="required">*</span></label>
               <input class="form-input" id="cfg-mun-prefeitura" type="text" maxlength="150" placeholder="Ex: PREFEITURA MUNICIPAL DE UTINGA - BA">
               <span class="form-help">Linha complementar no cabeçalho do DANFSe</span>
             </div>
@@ -244,17 +244,17 @@ export function renderConfiguracoesMunicipio(container) {
 
         <div class="form-row mb-4">
           <div class="form-group">
-            <label class="form-label">CNPJ do Município</label>
+            <label class="form-label">CNPJ do Município <span class="required">*</span></label>
             <input class="form-input form-input-mono" id="cfg-mun-cnpj" type="text" maxlength="18" placeholder="00.000.000/0000-00">
           </div>
           <div class="form-group">
-            <label class="form-label">UF</label>
+            <label class="form-label">UF <span class="required">*</span></label>
             <input class="form-input" id="cfg-mun-uf" type="text" maxlength="2" placeholder="BA" style="text-transform: uppercase;">
           </div>
         </div>
         <div class="form-row mb-4">
           <div class="form-group" style="flex: 1;">
-            <label class="form-label">Município (IBGE)</label>
+            <label class="form-label">Município (IBGE) <span class="required">*</span></label>
             <div class="municipio-select-wrapper">
               <input type="text" class="form-input municipio-display" id="cfg-mun-ibge-display"
                 placeholder="Selecione UF e busque por nome..." list="cfg-mun-ibge-list" autocomplete="off">
@@ -266,21 +266,41 @@ export function renderConfiguracoesMunicipio(container) {
         </div>
         <div class="form-row mb-4">
           <div class="form-group">
-            <label class="form-label">Inscrição Estadual</label>
+            <label class="form-label">Código TOM — Simples Nacional
+              <span style="font-size:0.72rem;color:var(--color-neutral-500);margin-left:6px;">(4 dígitos)</span>
+            </label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input class="form-input form-input-mono" id="cfg-mun-cod-tom" type="text"
+                maxlength="4" placeholder="0000" style="max-width:120px;" readonly
+                title="Preenchido automaticamente pelo código IBGE do município">
+              <span id="cfg-tom-nome-exibido" style="font-size:0.8rem;color:var(--color-neutral-400);"></span>
+            </div>
+            <span class="form-help">Preenchido automaticamente pela tabela de municípios (Simples Nacional) a partir do código IBGE.</span>
+            <div id="cfg-tom-sugestoes" style="display:none;margin-top:8px;border:1px solid var(--surface-glass-border);border-radius:var(--radius-md);overflow:hidden;max-width:500px;">
+              <div style="padding:6px 12px;font-size:0.72rem;color:var(--color-neutral-500);background:var(--surface-glass);">
+                Selecione o município correspondente:
+              </div>
+              <div id="cfg-tom-lista"></div>
+            </div>
+          </div>
+        </div>
+        <div class="form-row mb-4">
+          <div class="form-group">
+            <label class="form-label">Inscrição Estadual <span class="required">*</span></label>
             <input class="form-input form-input-mono" id="cfg-mun-ie" type="text" maxlength="15">
           </div>
           <div class="form-group">
-            <label class="form-label">E-mail Institucional</label>
+            <label class="form-label">E-mail Institucional <span class="required">*</span></label>
             <input class="form-input" id="cfg-mun-email" type="email" maxlength="100" placeholder="sefin@municipio.ba.gov.br">
           </div>
         </div>
         <div class="form-row mb-4">
           <div class="form-group">
-            <label class="form-label">Telefone</label>
+            <label class="form-label">Telefone <span class="required">*</span></label>
             <input class="form-input" id="cfg-mun-telefone" type="text" maxlength="20" placeholder="(00) 0000-0000">
           </div>
           <div class="form-group">
-            <label class="form-label">Endereço</label>
+            <label class="form-label">Endereço <span class="required">*</span></label>
             <input class="form-input" id="cfg-mun-endereco" type="text" maxlength="200">
           </div>
         </div>
@@ -295,18 +315,18 @@ export function renderConfiguracoesMunicipio(container) {
       <div class="card-body">
         <div class="form-row mb-4">
           <div class="form-group">
-            <label class="form-label">Ambiente</label>
+            <label class="form-label">Ambiente <span class="required">*</span></label>
             <select class="form-select" id="cfg-mun-ambiente">
               <option value="sandbox">Produção Restrita (Sandbox)</option>
               <option value="production">Produção</option>
             </select>
           </div>
+        </div>
+        <div class="form-row mb-4">
           <div class="form-group">
             <label class="form-label">URL Sefin Nacional</label>
             <input class="form-input form-input-mono" id="cfg-mun-url-sefin" type="text" readonly>
           </div>
-        </div>
-        <div class="form-row mb-4">
           <div class="form-group">
             <label class="form-label">URL ADN (Ambiente de Dados Nacional)</label>
             <input class="form-input form-input-mono" id="cfg-mun-url-adn" type="text" readonly>
@@ -315,8 +335,8 @@ export function renderConfiguracoesMunicipio(container) {
         <div class="form-row mb-4">
           <div class="form-group flex-1">
             <label class="form-label">URL ADN Municípios (override)</label>
-            <input class="form-input form-input-mono" id="cfg-mun-url-adn-mun" type="text" placeholder="Ex: https://adn.nfse.gov.br ou https://adn.nfse.gov.br/dfe (deixe vazio para padrão)">
-            <small class="form-hint">Se 404 persistir, tente: Produção <code>https://adn.nfse.gov.br</code> ou Sandbox <code>https://adn.producaorestrita.nfse.gov.br</code></small>
+            <input class="form-input form-input-mono" id="cfg-mun-url-adn-mun" type="text" placeholder="Ex: https://adn.nfse.gov.br/municipios (deixe vazio para padrão)">
+            <small class="form-hint">Preencha somente se a URL padrão retornar 404.</small>
           </div>
         </div>
       </div>
@@ -336,6 +356,41 @@ export function renderConfiguracoesMunicipio(container) {
     }
   })();
 
+  async function autoFillPorIbge(codIbge) {
+    if (!codIbge) return;
+    try {
+      const r = await fetch(`${getBackendUrl()}/municipios-tom?cod_ibge=${encodeURIComponent(codIbge)}`, { headers: authHeaders() });
+      if (!r.ok) return;
+      const data = await r.json();
+      const m = data.municipios?.[0];
+      if (!m) return;
+      // Preenche Ente Federativo
+      if (m.ente) {
+        const nomeEl = document.getElementById('cfg-mun-nome');
+        if (nomeEl) nomeEl.value = m.ente;
+      }
+      // Preenche e bloqueia o campo Código TOM
+      if (m.cod_tom) {
+        const tomEl = document.getElementById('cfg-mun-cod-tom');
+        if (tomEl) {
+          tomEl.value = m.cod_tom;
+          tomEl.readOnly = true;
+          tomEl.style.background = 'var(--surface-glass, rgba(255,255,255,0.04))';
+          tomEl.style.cursor = 'not-allowed';
+          tomEl.style.pointerEvents = 'none';
+        }
+        // Exibe o nome ao lado
+        const exiEl = document.getElementById('cfg-tom-nome-exibido');
+        if (exiEl) exiEl.textContent = `— ${m.ente || m.nome_empresarial} (${m.uf})`;
+        // Oculta o botão de busca manual (desnecessário)
+        const btnBuscar = document.getElementById('cfg-tom-buscar');
+        if (btnBuscar) btnBuscar.style.display = 'none';
+      }
+    } catch (_) { /* silencioso */ }
+  }
+  // Mantém retrocompatibilidade com chamadas anteriores
+  const autoFillEntePorIbge = autoFillPorIbge;
+
   function populateForm(cfg) {
     const el = (id) => document.getElementById(id);
     if (cfg.cnpj) el('cfg-mun-cnpj').value = maskCNPJ(cfg.cnpj);
@@ -345,15 +400,26 @@ export function renderConfiguracoesMunicipio(container) {
       el('cfg-mun-ibge').value = cfg.ibge;
       const displayEl = el('cfg-mun-ibge-display');
       if (displayEl) displayEl.value = formatMunicipioDisplaySync(cfg.ibge, cfg.nome, cfg.uf);
+      // Auto-preenche Ente Federativo E Código TOM pela tabela municipios_tom
+      autoFillPorIbge(cfg.ibge);
     }
     if (cfg.uf) el('cfg-mun-uf').value = cfg.uf;
+    // Se não houver IBGE mas houver TOM salvo, exibe o nome TOM normalmente
+    if (cfg.codTom && !cfg.ibge) {
+      el('cfg-mun-cod-tom').value = cfg.codTom;
+      exibirNomeTom(cfg.codTom, cfg.uf);
+    }
     if (cfg.inscEstadual) el('cfg-mun-ie').value = cfg.inscEstadual;
     if (cfg.email) el('cfg-mun-email').value = cfg.email;
     if (cfg.telefone) el('cfg-mun-telefone').value = cfg.telefone;
     if (cfg.endereco) el('cfg-mun-endereco').value = cfg.endereco;
     if (cfg.ambiente) el('cfg-mun-ambiente').value = cfg.ambiente;
     if (el('cfg-mun-url-adn-mun')) el('cfg-mun-url-adn-mun').value = cfg.urlAdnMun || '';
-    updateAmbUrls(cfg.ambiente || 'sandbox');
+    // Carrega URLs salvas; se não houver, preenche com os padrões do ambiente
+    const amb = cfg.ambiente || 'sandbox';
+    if (el('cfg-mun-url-sefin')) el('cfg-mun-url-sefin').value = cfg.urlSefin || '';
+    if (el('cfg-mun-url-adn'))   el('cfg-mun-url-adn').value   = cfg.urlAdn   || '';
+    updateAmbUrls(amb); // preenche padrões somente onde estiver vazio
     // Brasão
     if (cfg.brasao) {
       el('cfg-mun-brasao').value = cfg.brasao;
@@ -366,17 +432,21 @@ export function renderConfiguracoesMunicipio(container) {
     }
   }
 
-  function updateAmbUrls(amb) {
-    const sefin = amb === 'production' ? 'sefin.nfse.gov.br' : 'sefin.producaorestrita.nfse.gov.br';
-    const adn = amb === 'production' ? 'adn.nfse.gov.br' : 'adn.producaorestrita.nfse.gov.br';
+  // Preenche as URLs padrão SOMENTE se os campos estiverem vazios (não sobrescreve valores salvos)
+  function updateAmbUrls(amb, force = false) {
+    const DEFAULTS = {
+      sandbox:    { sefin: 'https://sefin.producaorestrita.nfse.gov.br/SefinNacional', adn: 'https://adn.producaorestrita.nfse.gov.br/contribuintes' },
+      production: { sefin: 'https://sefin.nfse.gov.br/SefinNacional',                 adn: 'https://adn.nfse.gov.br/contribuintes' },
+    };
+    const d = DEFAULTS[amb] || DEFAULTS.sandbox;
     const elSefin = document.getElementById('cfg-mun-url-sefin');
-    const elAdn = document.getElementById('cfg-mun-url-adn');
-    if (elSefin) elSefin.value = sefin;
-    if (elAdn) elAdn.value = adn;
+    const elAdn   = document.getElementById('cfg-mun-url-adn');
+    if (elSefin && (force || !elSefin.value)) elSefin.value = d.sefin;
+    if (elAdn   && (force || !elAdn.value))   elAdn.value   = d.adn;
   }
 
   document.getElementById('cfg-mun-ambiente')?.addEventListener('change', (e) => {
-    updateAmbUrls(e.target.value);
+    updateAmbUrls(e.target.value, true); // força ao trocar de ambiente
   });
 
   document.getElementById('cfg-mun-cnpj')?.addEventListener('input', (e) => {
@@ -453,7 +523,13 @@ export function renderConfiguracoesMunicipio(container) {
     const opt = Array.from(datalistEl?.querySelectorAll('option') || []).find(o => o.value === displayEl.value);
     if (opt) {
       hiddenEl.value = opt.dataset.code || '';
-      if (nomeEl) nomeEl.value = opt.dataset.nome || nomeEl.value;
+      // Preenche Ente Federativo pelo municipios_tom usando o código IBGE selecionado
+      const codIbge = opt.dataset.code || '';
+      if (codIbge) {
+        autoFillPorIbge(codIbge);
+      } else if (nomeEl) {
+        nomeEl.value = opt.dataset.nome || nomeEl.value;
+      }
     }
   });
   displayEl?.addEventListener('input', () => {
@@ -684,6 +760,7 @@ export function renderConfiguracoesMunicipio(container) {
       brasao: document.getElementById('cfg-mun-brasao')?.value || '',
       ibge: val('cfg-mun-ibge'),
       uf: val('cfg-mun-uf').toUpperCase(),
+      cod_tom: val('cfg-mun-cod-tom').padStart(4, '0').replace(/^0+$/, ''),
       inscEstadual: val('cfg-mun-ie'),
       email: val('cfg-mun-email'),
       telefone: val('cfg-mun-telefone'),
@@ -692,8 +769,21 @@ export function renderConfiguracoesMunicipio(container) {
       urlAdnMun: val('cfg-mun-url-adn-mun'),
     };
 
-    if (!payload.ibge) {
-      toast.warning('O código IBGE é obrigatório.');
+    const camposObrigatorios = [
+      { valor: payload.brasao,        label: 'Brasão do Município' },
+      { valor: payload.nome,          label: 'Ente Federativo' },
+      { valor: payload.prefeitura,    label: 'Entidade' },
+      { valor: payload.cnpj,          label: 'CNPJ do Município' },
+      { valor: payload.uf,            label: 'UF' },
+      { valor: payload.ibge,          label: 'Município (IBGE)' },
+      { valor: payload.inscEstadual,  label: 'Inscrição Estadual' },
+      { valor: payload.email,         label: 'E-mail Institucional' },
+      { valor: payload.telefone,      label: 'Telefone' },
+      { valor: payload.endereco,      label: 'Endereço' },
+    ];
+    const faltando = camposObrigatorios.filter(c => !c.valor);
+    if (faltando.length > 0) {
+      toast.warning(`Preencha os campos obrigatórios: ${faltando.map(c => c.label).join(', ')}.`);
       return;
     }
 
@@ -707,4 +797,183 @@ export function renderConfiguracoesMunicipio(container) {
       toast.error('Falha ao salvar configurações.');
     }
   });
+
+  // ═══ CÓDIGO TOM — Auto-sugestão ══════════════════════════════
+
+  const TOM_BASE = () => getBackendUrl(); // ex: http://localhost:3099/api
+
+  async function exibirNomeTom(codTom, uf) {
+    const exiEl = document.getElementById('cfg-tom-nome-exibido');
+    if (!exiEl) return;
+    if (!codTom || codTom.replace(/\D/g, '') === '') { exiEl.textContent = ''; return; }
+    const cod4 = String(codTom).padStart(4, '0');
+    try {
+      const r = await fetch(`${TOM_BASE()}/municipios-tom?cod_tom=${cod4}`, { headers: authHeaders() });
+      if (!r.ok) { exiEl.textContent = ''; return; }
+      const d = await r.json();
+      const muns = (d.municipios || []);
+      const m = uf ? (muns.find(x => x.uf === uf) || muns[0]) : muns[0];
+      exiEl.textContent = m ? `— ${m.ente || m.nome_empresarial} (${m.uf})` : '';
+    } catch { exiEl.textContent = ''; }
+  }
+
+  // Campo TOM é readonly e preenchido automaticamente via autoFillPorIbge (cod_ibge → municipios_tom)
+
+  // ═══ NOTAS TÉCNICAS — Gestão de Versões ═════════════════════
+  const ntSection = document.createElement('div');
+  ntSection.innerHTML = `
+    <div class="card animate-slide-up" style="padding:20px;margin-top:24px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <h3 class="card-title" style="margin-bottom:0;">📋 Notas Técnicas Vigentes (ADN / NFS-e)</h3>
+        <button id="cfg-nt-refresh" class="btn btn-ghost btn-sm">🔄 Atualizar</button>
+      </div>
+      <div id="cfg-nt-lista" style="display:grid;gap:10px;">
+        <div style="text-align:center;padding:20px;color:var(--color-neutral-500);">⏳ Carregando...</div>
+      </div>
+    </div>
+
+    <div class="card animate-slide-up" style="padding:20px;margin-top:24px;">
+      <h3 class="card-title" style="margin-bottom:16px;">🏛️ Coeficiente IBS — Histórico 2019–2026</h3>
+      <div style="padding:12px 16px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:var(--radius-md);font-size:0.8rem;color:rgba(99,102,241,0.9);margin-bottom:16px;">
+        ⚠️ <strong>Impacto estratégico permanente:</strong> O desempenho de arrecadação do ISSQN entre 2019 e 2026 define o coeficiente de participação do município na distribuição do IBS de <strong>2029 a 2077</strong>.
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+        <select id="cfg-hist-ano" class="form-input" style="width:120px;font-size:0.82rem;">
+          ${[2026,2025,2024,2023,2022,2021,2020,2019].map(a => `<option value="${a}">${a}</option>`).join('')}
+        </select>
+        <button id="cfg-hist-consolidar" class="btn btn-primary btn-sm">⚙️ Consolidar Ano</button>
+        <button id="cfg-hist-ver" class="btn btn-ghost btn-sm">👁️ Ver Histórico</button>
+        <button id="cfg-hist-export" class="btn btn-ghost btn-sm">📥 Exportar CSV</button>
+      </div>
+      <div id="cfg-hist-resultado" style="display:none;">
+        <div class="table-container" style="max-height:300px;overflow-y:auto;">
+          <table class="data-table" id="cfg-hist-tabela">
+            <thead>
+              <tr><th>CNPJ</th><th>Competência</th><th>Total Notas</th><th>V. Serviço Bruto</th><th>ISS Apurado</th><th>ISS Líquido</th><th>Hash SHA-256</th></tr>
+            </thead>
+            <tbody id="cfg-hist-tbody">
+              <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--color-neutral-500);">Nenhum dado consolidado.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+  container.appendChild(ntSection);
+
+  const fmtBRL2 = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
+  const fmtCNPJ2 = c => { const d = (c || '').replace(/\D/g, ''); return d.length === 14 ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : c; };
+
+  async function carregarNT() {
+    const lista = document.getElementById('cfg-nt-lista');
+    if (!lista) return;
+    try {
+      const r = await fetch(`${getBackendUrl()}/pgdas/nt-versoes`, { headers: { Authorization: `Bearer ${getMunToken()}` } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      const versoes = d.versoes || [];
+      if (!versoes.length) { lista.innerHTML = '<div style="color:var(--color-neutral-500);text-align:center;padding:16px;">Nenhuma NT cadastrada.</div>'; return; }
+
+      const statusMap = {
+        vigente:      ['🟡 Vigente',       'rgba(245,158,11,0.12)', 'rgba(245,158,11,0.9)'],
+        homologando:  ['🔵 Homologando',   'rgba(99,102,241,0.12)', 'rgba(99,102,241,0.9)'],
+        implementado: ['✅ Implementado',   'rgba(34,197,94,0.12)',  'rgba(34,197,94,0.8)'],
+        obsoleto:     ['⬛ Obsoleto',       'var(--surface-glass)', 'var(--color-neutral-500)'],
+      };
+
+      lista.innerHTML = versoes.map(v => {
+        const [sLabel, sBg, sCor] = statusMap[v.status] || ['—', 'transparent', 'var(--color-neutral-400)'];
+        return `
+          <div style="padding:14px 16px;background:var(--surface-glass);border-radius:var(--radius-md);border:1px solid var(--surface-glass-border);display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+            <div style="flex:1;min-width:200px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+                <strong style="font-size:0.88rem;">${v.codigo}</strong>
+                <span style="padding:2px 8px;border-radius:20px;font-size:0.68rem;background:${sBg};color:${sCor};font-weight:700;">${sLabel}</span>
+                ${v.data_obrigatoriedade ? `<span style="font-size:0.7rem;color:var(--color-neutral-500);">Obrig.: ${new Date(v.data_obrigatoriedade).toLocaleDateString('pt-BR')}</span>` : ''}
+              </div>
+              <div style="font-size:0.82rem;color:var(--color-neutral-300);">${v.titulo}</div>
+              <div style="font-size:0.75rem;color:var(--color-neutral-500);margin-top:4px;">${v.impacto || ''}</div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+              <select class="form-input nt-status-sel" data-codigo="${v.codigo}" style="font-size:0.75rem;padding:4px 8px;width:160px;">
+                ${['vigente','homologando','implementado','obsoleto'].map(s => `<option value="${s}" ${v.status===s?'selected':''}>${statusMap[s]?.[0] || s}</option>`).join('')}
+              </select>
+              ${v.link_oficial ? `<a href="${v.link_oficial}" target="_blank" class="btn btn-ghost btn-sm" style="font-size:0.72rem;">🔗</a>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+
+      document.querySelectorAll('.nt-status-sel').forEach(sel => {
+        sel.addEventListener('change', async () => {
+          const r = await fetch(`${getBackendUrl()}/pgdas/nt-versoes/${sel.dataset.codigo}`, {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${getMunToken()}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: sel.value, implementado_em: sel.value === 'implementado' ? new Date().toISOString() : null }),
+          });
+          if ((await r.json()).sucesso) toast.success('Status da NT atualizado.');
+        });
+      });
+    } catch (e) {
+      lista.innerHTML = `<div style="color:var(--color-danger-400);padding:16px;">❌ ${e.message}</div>`;
+    }
+  }
+
+  async function consolidarHistorico() {
+    const ano = document.getElementById('cfg-hist-ano')?.value;
+    const btn = document.getElementById('cfg-hist-consolidar');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Consolidando...'; }
+    try {
+      const r = await fetch(`${getBackendUrl()}/pgdas/historico-arrecadacao/consolidar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getMunToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ano: Number(ano) }),
+      });
+      const d = await r.json();
+      if (d.sucesso) { toast.success(`Histórico ${ano} consolidado — ${d.registros_consolidados} registros.`); verHistorico(); }
+      else toast.error(d.erro || 'Erro na consolidação.');
+    } catch (e) { toast.error(e.message); }
+    if (btn) { btn.disabled = false; btn.textContent = '⚙️ Consolidar Ano'; }
+  }
+
+  async function verHistorico() {
+    const ano = document.getElementById('cfg-hist-ano')?.value;
+    const painel = document.getElementById('cfg-hist-resultado');
+    if (painel) painel.style.display = 'block';
+    const tbody = document.getElementById('cfg-hist-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:16px;">⏳ Carregando...</td></tr>';
+    try {
+      const r = await fetch(`${getBackendUrl()}/pgdas/historico-arrecadacao?ano=${ano}`, { headers: { Authorization: `Bearer ${getMunToken()}` } });
+      const d = await r.json();
+      const regs = d.registros || [];
+      if (tbody) tbody.innerHTML = regs.length ? regs.map(reg => `
+        <tr>
+          <td style="font-family:monospace;font-size:0.78rem;">${fmtCNPJ2(reg.cnpj)}</td>
+          <td style="font-family:monospace;">${reg.competencia}</td>
+          <td style="text-align:center;">${reg.total_notas}</td>
+          <td style="text-align:right;">${fmtBRL2(reg.v_servico_bruto)}</td>
+          <td style="text-align:right;">${fmtBRL2(reg.v_iss_apurado)}</td>
+          <td style="text-align:right;">${fmtBRL2(reg.v_iss_liquido)}</td>
+          <td style="font-family:monospace;font-size:0.65rem;color:var(--color-neutral-500);" title="${reg.hash_sha256}">${(reg.hash_sha256 || '').substring(0,16)}...</td>
+        </tr>`).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--color-neutral-400);padding:20px;">Nenhum registro para este ano. Clique em "Consolidar Ano" para gerar.</td></tr>';
+    } catch (e) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger-400);">❌ ${e.message}</td></tr>`;
+    }
+  }
+
+  function exportarHistCSV() {
+    const rows = document.querySelectorAll('#cfg-hist-tbody tr');
+    if (!rows.length) { toast.info('Sem dados para exportar.'); return; }
+    const ano = document.getElementById('cfg-hist-ano')?.value;
+    const header = 'CNPJ;Competencia;Total_Notas;V_Servico_Bruto;ISS_Apurado;ISS_Liquido;Hash_SHA256\n';
+    const linhas = Array.from(rows).map(r => Array.from(r.cells).map(c => `"${c.textContent.trim()}"`).join(';')).join('\n');
+    const blob = new Blob(['\uFEFF' + header + linhas], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `historico-arrecadacao-${ano}.csv`; a.click();
+  }
+
+  document.getElementById('cfg-nt-refresh')?.addEventListener('click', carregarNT);
+  document.getElementById('cfg-hist-consolidar')?.addEventListener('click', consolidarHistorico);
+  document.getElementById('cfg-hist-ver')?.addEventListener('click', verHistorico);
+  document.getElementById('cfg-hist-export')?.addEventListener('click', exportarHistCSV);
+
+  carregarNT();
 }

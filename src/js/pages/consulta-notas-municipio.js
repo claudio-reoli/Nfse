@@ -121,6 +121,7 @@ export function renderConsultaNotasMun(container) {
               <th style="max-width:180px;">Serviço</th>
               <th style="width:110px;text-align:right;">Valor (R$)</th>
               <th style="width:70px;text-align:center;">ISS</th>
+              <th style="width:60px;text-align:center;">IBS/CBS</th>
               <th style="width:60px;text-align:center;">Fonte</th>
               <th style="width:40px;text-align:center;"></th>
             </tr>
@@ -141,14 +142,10 @@ export function renderConsultaNotasMun(container) {
       </div>
     </div>
 
-    <div id="modal-detalhes" class="modal-overlay hidden" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;display:none;">
-      <div class="card" style="width:100%;max-width:900px;max-height:92vh;overflow-y:auto;position:relative;">
-        <button id="fechar-modal-det" class="btn btn-ghost" style="position:absolute;right:10px;top:10px;font-weight:bold;color:var(--color-danger-400);z-index:10;">✕</button>
-        <div class="card-header">
-          <h3 class="card-title">Dados completos da NFS-e</h3>
-          <p style="font-size:0.8rem;color:var(--color-neutral-400);margin-top:4px;">Agrupados por: Dados Gerais, Partes, Serviço, Valores, Tributos e demais blocos de negócio</p>
-        </div>
-        <div class="card-body" id="detalhes-conteudo" style="padding:20px;"></div>
+    <div id="modal-detalhes" class="modal-overlay hidden" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.72);z-index:1000;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px;display:none;">
+      <div id="modal-det-inner" style="width:100%;max-width:980px;border-radius:var(--radius-xl);overflow:hidden;background:var(--surface-card);border:1px solid var(--surface-glass-border);position:relative;margin:auto;">
+        <button id="fechar-modal-det" title="Fechar" style="position:absolute;right:14px;top:14px;background:rgba(239,68,68,0.12);border:none;color:var(--color-danger-400);cursor:pointer;width:30px;height:30px;border-radius:50%;font-size:16px;font-weight:bold;line-height:1;z-index:10;display:flex;align-items:center;justify-content:center;">✕</button>
+        <div id="detalhes-conteudo"></div>
       </div>
     </div>
   `;
@@ -227,6 +224,9 @@ export function renderConsultaNotasMun(container) {
           <div>${aliq ? fmtPct(aliq) : '—'}</div>
           <div style="font-size:0.72rem;color:${retColor};">${retInfo ? retInfo.replace('Retido pelo ', '') : '—'}</div>
         </td>
+        <td style="text-align:center;">
+          ${(() => { const ib = n.tributos?.ibscbs || n.ibscbs || {}; const ok = ib.CST || ib.cClassTrib; return ok ? '<span title="IBS/CBS preenchido" style="font-size:0.7rem;padding:2px 6px;border-radius:20px;background:rgba(99,102,241,0.15);color:rgba(99,102,241,0.9);">✓ 2026</span>' : '<span title="Campos IBS/CBS ausentes" style="font-size:0.7rem;padding:2px 6px;border-radius:20px;background:rgba(245,158,11,0.12);color:rgba(245,158,11,0.85);">⚠️</span>'; })()}
+        </td>
         <td style="text-align:center;">${fonteBadge}${decisaoBadge ? '<br>' + decisaoBadge : ''}</td>
         <td style="text-align:center;">
           <button class="btn btn-ghost btn-sm btn-detalhes" data-chave="${chave}"
@@ -294,221 +294,381 @@ export function renderConsultaNotasMun(container) {
     }
   }
 
-  function abrirModalDetalhes(n) {
-    const g = n.dadosGerais || {};
-    const s = n.servico || {};
-    const v = n.valores || {};
-    const ti = n.tributos?.issqn || {};
-    const tf = n.tributos?.federal || {};
-    const tt = n.tributos?.totais || {};
-    const ib = n.ibscbs || {};
-    const ce = n.comercioExterior || {};
-    const ob = n.obra || {};
-    const ev = n.atvEvt || {};
-    const im = n.imovel || {};
-    const dr = v.dedRed || {};
-
-    const retIss = RET_ISSQN_MAP[ti.tpRetISSQN] || (n.issRetidoFonte ? 'Retido' : 'Não Retido');
-    const isRetido = ti.tpRetISSQN === '2' || ti.tpRetISSQN === '3' || n.issRetidoFonte;
-
-    let html = '';
-    if (g.cStat === '102') {
-      html += `<div style="margin-bottom:14px;padding:12px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:var(--radius-md);color:var(--color-danger-400);font-weight:600;">
-        ⚠️ Decisão Judicial/Administrativa — Esta NFS-e foi emitida pelo fluxo bypass (cStat=102). Exige homologação manual no fim do mês.
+  function buildSection(icon, title, content) {
+    if (!content.trim()) return '';
+    return `
+      <div style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <span style="font-size:1rem;">${icon}</span>
+          <span style="font-size:0.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--color-primary-300);">${title}</span>
+          <div style="flex:1;height:1px;background:var(--surface-glass-border);margin-left:4px;"></div>
+        </div>
+        ${content}
       </div>`;
-    }
+  }
 
-    html += `<div style="margin-bottom:14px;">
-      <span style="font-size:0.75rem;color:var(--color-neutral-400);">CHAVE DE ACESSO PADRÃO NACIONAL</span><br>
-      <strong style="word-break:break-all;color:var(--color-primary-400);font-family:monospace;font-size:0.9rem;">${n.chaveAcesso || '—'}</strong>
+  function buildGrid2(rows) {
+    const items = rows.filter(Boolean);
+    if (!items.length) return '';
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;">${items.join('')}</div>`;
+  }
+
+  function buildGrid3(items) {
+    return `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">${items.join('')}</div>`;
+  }
+
+  function buildStatCard(label, value, color = 'var(--color-neutral-200)') {
+    return `<div style="padding:12px 14px;background:var(--surface-glass);border-radius:var(--radius-md);border:1px solid var(--surface-glass-border);">
+      <div style="font-size:0.7rem;color:var(--color-neutral-500);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">${label}</div>
+      <div style="font-size:1rem;font-weight:700;color:${color};">${value}</div>
     </div>`;
+  }
 
-    html += `<div style="font-size:0.8rem;font-weight:600;color:var(--color-primary-300);margin:16px 0 8px;border-bottom:1px solid var(--surface-glass-border);padding-bottom:4px;">DADOS GERAIS</div>`;
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">';
-    html += buildRow('NSU', n.nsu);
-    html += buildRow('Série / Nº DPS', `${safe(g.serie)} / ${safe(g.nDPS)}`);
-    html += buildRow('Data Emissão', fmtData(g.dhEmi));
-    html += buildRow('Competência', safe(g.dCompet));
-    html += buildRow('Município Emissor', formatMunicipioDisplaySync(g.cLocEmi, g.xLocEmi, g.uf) || safe(g.cLocEmi));
-    html += buildRow('Emitente', TP_EMIT_MAP[g.tpEmit] || safe(g.tpEmit));
-    html += buildRow('Finalidade', g.finNFSe === '0' ? 'Regular' : safe(g.finNFSe));
-    html += buildRow('Versão Aplicação', safe(g.verAplic));
-    html += buildRow('Status', n.status, n.status === 'Ativa' ? 'var(--color-success-400)' : 'var(--color-danger-400)');
-    html += buildRow('Importado em', fmtData(n._importadoEm));
-    html += '</div>';
-    if (g.xInfComp) html += `<div style="margin-top:6px;font-size:0.82rem;padding:8px;background:var(--surface-glass);border-radius:var(--radius-sm);"><strong>Info Complementar:</strong> ${g.xInfComp}</div>`;
-    if (g.chSubstda) html += `<div style="margin-top:4px;font-size:0.82rem;">Substitui: <code>${g.chSubstda}</code> — Motivo: ${safe(g.xMotivo)} (${safe(g.cMotivo)})</div>`;
+  function buildDetailRow(label, value, color) {
+    if (!value || value === '—') return '';
+    const style = color ? `color:${color};font-weight:600;` : 'font-weight:500;';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+      <span style="color:var(--color-neutral-400);font-size:0.82rem;">${label}</span>
+      <span style="font-size:0.83rem;${style}text-align:right;max-width:58%;">${value}</span>
+    </div>`;
+  }
 
-    html += `<div style="font-size:0.8rem;font-weight:600;color:var(--color-primary-300);margin:16px 0 8px;border-bottom:1px solid var(--surface-glass-border);padding-bottom:4px;">PARTES</div>`;
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
-    html += buildPessoaCard('PRESTADOR', n.prestador);
-    html += buildPessoaCard('TOMADOR', n.tomador);
-    html += '</div>';
-    if (n.intermediario?.CNPJ || n.intermediario?.xNome) html += buildPessoaCard('INTERMEDIÁRIO', n.intermediario);
-    if (n.destinatario?.CNPJ || n.destinatario?.xNome) html += buildPessoaCard('DESTINATÁRIO', n.destinatario);
+  function buildPersonCard(title, p, accentColor = 'var(--color-primary-400)') {
+    if (!p || (!p.CNPJ && !p.CPF && !p.NIF && !p.xNome)) return '';
+    const doc = p.CNPJ ? fmtCNPJ(p.CNPJ) : p.CPF ? fmtCPF(p.CPF) : p.NIF || '';
+    const docLabel = p.CNPJ ? 'CNPJ' : p.CPF ? 'CPF' : 'NIF';
+    const initials = (p.xNome || '??').replace(/[^a-zA-Z\s]/g, '').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');
+    const im = p.IM ? `<div style="font-size:0.78rem;color:var(--color-neutral-400);">IM: ${p.IM}</div>` : '';
+    const caepf = p.CAEPF ? `<div style="font-size:0.78rem;color:var(--color-neutral-400);">CAEPF: ${p.CAEPF}</div>` : '';
+    const contato = [p.fone, p.email].filter(Boolean).join(' · ');
+    const end = buildEnderecoHtml(p.endereco);
+    const regimes = [
+      p.opSimpNac ? `SN: ${OP_SIMP_MAP[p.opSimpNac]||p.opSimpNac}` : '',
+      p.regEspTrib && p.regEspTrib !== '0' ? `Reg.Esp: ${REG_ESP_MAP[p.regEspTrib]||p.regEspTrib}` : '',
+    ].filter(Boolean).join(' · ');
+    return `<div style="padding:14px;background:var(--surface-glass);border-radius:var(--radius-md);border:1px solid var(--surface-glass-border);">
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${accentColor};margin-bottom:10px;">${title}</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <div style="width:38px;height:38px;border-radius:50%;background:${accentColor}22;border:2px solid ${accentColor}44;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85rem;color:${accentColor};flex-shrink:0;">${initials||'?'}</div>
+        <div>
+          <div style="font-weight:600;font-size:0.9rem;">${safe(p.xNome)}</div>
+          <div style="font-size:0.78rem;color:var(--color-neutral-400);font-family:monospace;">${docLabel}: ${doc}</div>
+        </div>
+      </div>
+      ${im}${caepf}
+      ${contato ? `<div style="font-size:0.78rem;color:var(--color-neutral-400);margin-top:4px;">📞 ${contato}</div>` : ''}
+      ${end ? `<div style="font-size:0.76rem;color:var(--color-neutral-500);margin-top:4px;line-height:1.4;">📍 ${end}</div>` : ''}
+      ${regimes ? `<div style="font-size:0.76rem;color:var(--color-neutral-400);margin-top:5px;padding:4px 8px;background:rgba(255,255,255,0.04);border-radius:4px;">${regimes}</div>` : ''}
+    </div>`;
+  }
 
-    html += `<div style="font-size:0.8rem;font-weight:600;color:var(--color-primary-300);margin:16px 0 8px;border-bottom:1px solid var(--surface-glass-border);padding-bottom:4px;">SERVIÇO</div>`;
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">';
-    html += buildRow('Cód. Trib. Nacional', safe(s.cTribNac));
-    html += buildRow('Cód. Trib. Municipal', safe(s.cTribMun));
-    html += buildRow('Cód. NBS', safe(s.cNBS));
-    html += buildRow('Local Prestação', (s.cPaisPrestacao && String(s.cPaisPrestacao).toUpperCase() !== 'BR')
+  function abrirModalDetalhes(n) {
+    const g  = n.dadosGerais || {};
+    const s  = n.servico     || {};
+    const v  = n.valores     || {};
+    const ti = n.tributos?.issqn    || {};
+    const tf = n.tributos?.federal  || {};
+    const tt = n.tributos?.totais   || {};
+    const ib = n.ibscbs             || {};
+    const ce = n.comercioExterior   || {};
+    const ob = n.obra               || {};
+    const ev = n.atvEvt             || {};
+    const im = n.imovel             || {};
+    const dr = v.dedRed             || {};
+
+    const retIss  = RET_ISSQN_MAP[ti.tpRetISSQN] || (n.issRetidoFonte ? 'Retido' : 'Não Retido');
+    const isRetido = ti.tpRetISSQN === '2' || ti.tpRetISSQN === '3' || n.issRetidoFonte;
+    const statusColor = n.status === 'Ativa' ? 'var(--color-success-400)' : 'var(--color-danger-400)';
+    const vServ = v.vServ ?? n.valorServico ?? 0;
+    const vLiq  = v.vLiq  ?? vServ;
+    const vIss  = ti.vISS ?? 0;
+    const pAliq = ti.pAliq ?? 0;
+
+    // ── Alerta cStat 102 ──
+    const alertBanner = g.cStat === '102'
+      ? `<div style="padding:12px 20px;background:rgba(239,68,68,0.15);border-left:4px solid var(--color-danger-400);color:var(--color-danger-300);font-size:0.85rem;font-weight:600;">
+           ⚠️ Decisão Judicial/Administrativa (cStat=102) — fluxo bypass. Exige homologação manual ao fechar o mês.
+         </div>`
+      : '';
+
+    // ── Cabeçalho ──
+    const header = `
+      <div style="padding:20px 24px 16px;border-bottom:1px solid var(--surface-glass-border);">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+          <div>
+            <div style="font-size:1.05rem;font-weight:700;margin-bottom:4px;">Dados Completos da NFS-e</div>
+            <div style="font-size:0.72rem;color:var(--color-neutral-500);">NSU ${n.nsu} · ${fmtData(g.dhEmi)} · Competência ${safe(g.dCompet)}</div>
+          </div>
+          <span class="badge ${n.status === 'Ativa' ? 'badge-success' : 'badge-danger'}" style="font-size:0.78rem;padding:4px 12px;">${n.status || 'Ativa'}</span>
+        </div>
+        <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:var(--radius-md);padding:10px 14px;">
+          <div style="font-size:0.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:4px;">Chave de Acesso Padrão Nacional</div>
+          <div style="font-family:monospace;font-size:0.88rem;word-break:break-all;color:var(--color-primary-300);letter-spacing:.03em;">${n.chaveAcesso || '—'}</div>
+        </div>
+      </div>`;
+
+    // ── Summary cards ──
+    const summary = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;padding:16px 24px;border-bottom:1px solid var(--surface-glass-border);">
+        ${buildStatCard('Valor do Serviço', fmtBRL(vServ), 'var(--color-primary-400)')}
+        ${buildStatCard('Valor Líquido', fmtBRL(vLiq), 'var(--color-success-400)')}
+        ${buildStatCard('ISS / Alíquota', vIss ? `${fmtBRL(vIss)} · ${fmtPct(pAliq)}` : (pAliq ? fmtPct(pAliq) : '—'), isRetido ? 'var(--color-danger-400)' : 'var(--color-neutral-200)')}
+        ${buildStatCard('Retenção ISS', retIss, isRetido ? 'var(--color-danger-400)' : 'var(--color-success-400)')}
+        ${buildStatCard('Emitente', TP_EMIT_MAP[g.tpEmit] || safe(g.tpEmit))}
+        ${buildStatCard('Município', formatMunicipioDisplaySync(g.cLocEmi, g.xLocEmi, g.uf) || safe(g.cLocEmi) || '—')}
+      </div>`;
+
+    // ── Abas ──
+    const tabs = ['Geral', 'Partes', 'Serviço', 'Valores', 'Tributos', 'Outros'];
+    const hasTabs = true;
+    const tabsHtml = `
+      <div id="det-tabs" style="display:flex;gap:2px;padding:12px 24px 0;border-bottom:1px solid var(--surface-glass-border);overflow-x:auto;">
+        ${tabs.map((t, i) => `
+          <button class="det-tab-btn" data-tab="${i}"
+            style="padding:7px 14px;border:none;background:${i===0?'var(--color-primary-500)':'transparent'};
+                   color:${i===0?'#fff':'var(--color-neutral-400)'};border-radius:var(--radius-md) var(--radius-md) 0 0;
+                   cursor:pointer;font-size:0.8rem;font-weight:600;white-space:nowrap;transition:all .15s;">
+            ${t}
+          </button>`).join('')}
+      </div>`;
+
+    // ── Conteúdo por aba ──
+
+    // Aba 0 — Geral
+    const tabGeral = `
+      ${buildSection('📋', 'Identificação', buildGrid2([
+        buildDetailRow('NSU', String(n.nsu)),
+        buildDetailRow('Série / Nº DPS', `${safe(g.serie)} / ${safe(g.nDPS)}`),
+        buildDetailRow('Data Emissão', fmtData(g.dhEmi)),
+        buildDetailRow('Competência', safe(g.dCompet)),
+        buildDetailRow('Finalidade', g.finNFSe === '0' ? 'Regular' : safe(g.finNFSe)),
+        buildDetailRow('Versão Aplicação', safe(g.verAplic)),
+        buildDetailRow('Tipo Emissão', TP_EMIT_MAP[g.tpEmit] || safe(g.tpEmit)),
+        buildDetailRow('Importado em', fmtData(n._importadoEm)),
+      ]))}
+      ${g.xInfComp ? buildSection('💬', 'Informação Complementar', `<div style="padding:10px 12px;background:var(--surface-glass);border-radius:var(--radius-md);font-size:0.83rem;line-height:1.6;">${g.xInfComp}</div>`) : ''}
+      ${g.chSubstda ? buildSection('🔄', 'Substituição', buildGrid2([
+        buildDetailRow('Chave Substituída', g.chSubstda),
+        buildDetailRow('Motivo', `${safe(g.xMotivo)} (${safe(g.cMotivo)})`),
+      ])) : ''}
+      ${g.xPed || g.idDocTec || g.docRef ? buildSection('🔗', 'Referências', buildGrid2([
+        buildDetailRow('Pedido / OS', safe(g.xPed)),
+        buildDetailRow('Doc. Técnico', safe(g.idDocTec)),
+        buildDetailRow('Doc. Referência', safe(g.docRef)),
+      ])) : ''}`;
+
+    // Aba 1 — Partes
+    const tabPartes = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        ${buildPersonCard('Prestador', n.prestador, 'var(--color-primary-400)')}
+        ${buildPersonCard('Tomador', n.tomador, 'var(--color-accent-400)')}
+      </div>
+      ${n.intermediario?.xNome || n.intermediario?.CNPJ ? buildPersonCard('Intermediário', n.intermediario, 'var(--color-warning-400)') : ''}
+      ${n.destinatario?.xNome || n.destinatario?.CNPJ ? buildPersonCard('Destinatário', n.destinatario, 'var(--color-neutral-400)') : ''}`;
+
+    // Aba 2 — Serviço
+    const localPrest = (s.cPaisPrestacao && String(s.cPaisPrestacao).toUpperCase() !== 'BR')
       ? (formatEstrangeiroDisplay(s.cPaisPrestacao) || `Exterior — País: ${s.cPaisPrestacao}`)
-      : formatMunicipioDisplaySync(s.cLocPrestacao, s.xLocPrestacao, s.uf) || safe(s.cLocPrestacao));
-    html += buildRow('País Prestação', safe(s.cPaisPrestacao));
-    html += buildRow('Modo Prestação', MD_PREST_MAP[s.mdPrestacao] || safe(s.mdPrestacao));
-    html += buildRow('Vínculo', safe(s.vincPrest));
-    html += buildRow('Moeda', safe(s.tpMoeda));
-    html += buildRow('Valor Moeda Ext.', s.vServMoeda ? fmtBRL(s.vServMoeda) : '—');
-    html += buildRow('Cód. Interno', safe(s.cIntContrib));
-    html += '</div>';
-    if (s.xDescServ) html += `<div style="margin-top:6px;font-size:0.82rem;padding:8px;background:var(--surface-glass);border-radius:var(--radius-sm);"><strong>Descrição:</strong> ${s.xDescServ}</div>`;
+      : formatMunicipioDisplaySync(s.cLocPrestacao, s.xLocPrestacao, s.uf) || safe(s.cLocPrestacao);
+    const tabServico = `
+      ${buildSection('🏷️', 'Classificação', buildGrid2([
+        buildDetailRow('Código Tributação Nacional', safe(s.cTribNac || s.cServ?.cTribNac)),
+        buildDetailRow('Código Tributação Municipal', safe(s.cTribMun || s.cServ?.cTribMun)),
+        buildDetailRow('Código NBS', safe(s.cNBS)),
+        buildDetailRow('Código Interno Contribuinte', safe(s.cIntContrib)),
+      ]))}
+      ${buildSection('📍', 'Prestação', buildGrid2([
+        buildDetailRow('Local de Prestação', localPrest),
+        buildDetailRow('País de Prestação', safe(s.cPaisPrestacao)),
+        buildDetailRow('Modo de Prestação', MD_PREST_MAP[s.mdPrestacao] || safe(s.mdPrestacao)),
+        buildDetailRow('Vínculo com Prestação', safe(s.vincPrest)),
+        buildDetailRow('Moeda', safe(s.tpMoeda)),
+        buildDetailRow('Valor em Moeda Estrangeira', s.vServMoeda ? fmtBRL(s.vServMoeda) : ''),
+      ]))}
+      ${s.xDescServ ? buildSection('📝', 'Descrição do Serviço', `<div style="padding:12px;background:var(--surface-glass);border-radius:var(--radius-md);font-size:0.85rem;line-height:1.65;">${s.xDescServ}</div>`) : ''}`;
 
-    html += `<div style="font-size:0.8rem;font-weight:600;color:var(--color-primary-300);margin:16px 0 8px;border-bottom:1px solid var(--surface-glass-border);padding-bottom:4px;">VALORES</div>`;
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">';
-    html += buildRow('Valor dos Serviços', fmtBRL(v.vServ), 'var(--color-primary-400)');
-    html += buildRow('Desc. Incondicionado', v.vDescIncond ? fmtBRL(v.vDescIncond) : '—');
-    html += buildRow('Desc. Condicionado', v.vDescCond ? fmtBRL(v.vDescCond) : '—');
-    html += buildRow('Valor Líquido', v.vLiq ? fmtBRL(v.vLiq) : '—', 'var(--color-success-400)');
-    html += buildRow('Valor Recebido Interm.', v.vReceb ? fmtBRL(v.vReceb) : '—');
-    html += '</div>';
-    if (dr.pDR || dr.vDR) {
-      html += '<div style="margin-top:4px;font-size:0.82rem;">';
-      html += `Dedução/Redução: ${dr.pDR ? fmtPct(dr.pDR / 100) : ''} ${dr.vDR ? fmtBRL(dr.vDR) : ''} — ${(dr.documentos || []).length} doc(s)`;
-      html += '</div>';
-    }
+    // Aba 3 — Valores
+    const tabValores = `
+      ${buildSection('💰', 'Composição dos Valores', buildGrid2([
+        buildDetailRow('Valor dos Serviços', fmtBRL(v.vServ), 'var(--color-primary-400)'),
+        buildDetailRow('Desconto Incondicionado', v.vDescIncond ? fmtBRL(v.vDescIncond) : ''),
+        buildDetailRow('Desconto Condicionado', v.vDescCond ? fmtBRL(v.vDescCond) : ''),
+        buildDetailRow('Valor Líquido', v.vLiq ? fmtBRL(v.vLiq) : '', 'var(--color-success-400)'),
+        buildDetailRow('Recebido pelo Intermediário', v.vReceb ? fmtBRL(v.vReceb) : ''),
+      ]))}
+      ${(dr.pDR || dr.vDR) ? buildSection('➖', 'Dedução / Redução', buildGrid2([
+        buildDetailRow('Percentual DR', dr.pDR ? fmtPct(dr.pDR/100) : ''),
+        buildDetailRow('Valor DR', dr.vDR ? fmtBRL(dr.vDR) : ''),
+        buildDetailRow('Documentos', String((dr.documentos||[]).length)),
+      ])) : ''}`;
 
-    html += `<div style="font-size:0.8rem;font-weight:600;color:var(--color-primary-300);margin:16px 0 8px;border-bottom:1px solid var(--surface-glass-border);padding-bottom:4px;">TRIBUTOS — ISSQN</div>`;
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">';
-    html += buildRow('Tributação', TRIB_ISSQN_MAP[ti.tribISSQN] || safe(ti.tribISSQN));
-    html += buildRow('Alíquota ISS', ti.pAliq ? fmtPct(ti.pAliq) : '—');
-    html += buildRow('Retenção ISS', retIss, isRetido ? 'var(--color-danger-400)' : 'var(--color-success-400)');
-    html += buildRow('País Resultado', safe(ti.cPaisResult));
-    html += buildRow('Imunidade', safe(ti.tpImunidade));
-    html += buildRow('Exig. Suspensa', safe(ti.tpSusp));
-    html += buildRow('Nº Processo', safe(ti.nProcesso));
-    html += buildRow('Benefício Municipal', safe(ti.nBM));
-    html += buildRow('Red. BC (BM) R$', ti.vRedBCBM ? fmtBRL(ti.vRedBCBM) : '—');
-    html += buildRow('Red. BC (BM) %', ti.pRedBCBM ? fmtPct(ti.pRedBCBM / 100) : '—');
-    html += '</div>';
+    // Aba 4 — Tributos
+    const hasFed  = tf.CST || tf.vBCPisCofins || tf.pAliqPis || tf.vRetCP || tf.vRetIRRF || tf.vRetCSLL;
+    const hasTot  = tt.vTotTribFed || tt.vTotTribEst || tt.vTotTribMun;
+    const hasIbsCbs = ib.CST || ib.cClassTrib || ib.pDifUF || ib.pDifMun || ib.pDifCBS;
+    const pAliqIBS = ib.pAliqIBS || ib.pDifMun || '0,1';
+    const pAliqCBS = ib.pAliqCBS || ib.pDifCBS || '0,9';
+    const tabTributos = `
+      <!-- Banner IBS/CBS Reforma Tributária -->
+      ${hasIbsCbs ? `
+        <div style="margin:0 0 16px;padding:12px 16px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:var(--radius-md);font-size:0.8rem;">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span style="font-size:1rem;">⚖️</span>
+            <strong style="color:rgba(99,102,241,0.9);">IBS / CBS — Reforma Tributária</strong>
+            <span style="padding:2px 8px;border-radius:20px;font-size:0.68rem;background:rgba(99,102,241,0.15);color:rgba(99,102,241,0.9);font-weight:700;">INFORMATIVO 2026</span>
+            <span style="color:var(--color-neutral-400);font-size:0.75rem;">Valores simbólicos em 2026 — impacto efetivo inicia em 2027 (LC 214/2025)</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px;">
+            <div style="padding:10px;background:var(--surface-glass);border-radius:var(--radius-md);">
+              <div style="font-size:0.65rem;color:var(--color-neutral-500);margin-bottom:2px;">CST IBS/CBS</div>
+              <div style="font-weight:700;color:rgba(99,102,241,0.9);">${ib.CST || '—'}</div>
+            </div>
+            <div style="padding:10px;background:var(--surface-glass);border-radius:var(--radius-md);">
+              <div style="font-size:0.65rem;color:var(--color-neutral-500);margin-bottom:2px;">Class. Tributária (cClassTrib)</div>
+              <div style="font-weight:700;color:rgba(99,102,241,0.9);">${ib.cClassTrib || '—'}</div>
+            </div>
+            <div style="padding:10px;background:var(--surface-glass);border-radius:var(--radius-md);">
+              <div style="font-size:0.65rem;color:var(--color-neutral-500);margin-bottom:2px;">Alíquota IBS Municipal</div>
+              <div style="font-weight:700;color:rgba(99,102,241,0.9);">${pAliqIBS}%</div>
+            </div>
+            <div style="padding:10px;background:var(--surface-glass);border-radius:var(--radius-md);">
+              <div style="font-size:0.65rem;color:var(--color-neutral-500);margin-bottom:2px;">Alíquota CBS Federal</div>
+              <div style="font-weight:700;color:rgba(99,102,241,0.9);">${pAliqCBS}%</div>
+            </div>
+            <div style="padding:10px;background:var(--surface-glass);border-radius:var(--radius-md);">
+              <div style="font-size:0.65rem;color:var(--color-neutral-500);margin-bottom:2px;">NBS (cNBS)</div>
+              <div style="font-weight:700;color:rgba(99,102,241,0.9);">${ib.cNBS || n.servico?.cNBS || '—'}</div>
+            </div>
+          </div>
+        </div>` :
+        `<div style="margin:0 0 16px;padding:10px 16px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:var(--radius-md);font-size:0.78rem;color:rgba(245,158,11,0.85);">
+          ⚠️ <strong>Campos IBS/CBS ausentes</strong> — Esta NFS-e não contém os grupos IBSCBS exigidos pela NT 004 v2.0. Verificar conformidade (LC 214/2025).
+        </div>`
+      }
+      ${buildSection('🏛️', 'ISSQN', buildGrid2([
+        buildDetailRow('Tributação', TRIB_ISSQN_MAP[ti.tribISSQN] || safe(ti.tribISSQN)),
+        buildDetailRow('Alíquota ISS', ti.pAliq ? fmtPct(ti.pAliq) : ''),
+        buildDetailRow('ISS Apurado', ti.vISS ? fmtBRL(ti.vISS) : ''),
+        buildDetailRow('Retenção ISS', retIss, isRetido ? 'var(--color-danger-400)' : 'var(--color-success-400)'),
+        buildDetailRow('BC ISS', ti.vBC ? fmtBRL(ti.vBC) : ''),
+        buildDetailRow('Imunidade', safe(ti.tpImunidade)),
+        buildDetailRow('Exigibilidade Suspensa', safe(ti.tpSusp)),
+        buildDetailRow('Nº Processo', safe(ti.nProcesso)),
+        buildDetailRow('Benefício Municipal', safe(ti.nBM)),
+        buildDetailRow('Redução BC (BM) R$', ti.vRedBCBM ? fmtBRL(ti.vRedBCBM) : ''),
+        buildDetailRow('Redução BC (BM) %', ti.pRedBCBM ? fmtPct(ti.pRedBCBM/100) : ''),
+        buildDetailRow('País Resultado', safe(ti.cPaisResult)),
+      ]))}
+      ${hasFed ? buildSection('🇧🇷', 'Tributos Federais', buildGrid2([
+        buildDetailRow('CST PIS/COFINS', safe(tf.CST)),
+        buildDetailRow('BC PIS/COFINS', tf.vBCPisCofins ? fmtBRL(tf.vBCPisCofins) : ''),
+        buildDetailRow('Alíquota PIS', tf.pAliqPis ? `${tf.pAliqPis}%` : ''),
+        buildDetailRow('Alíquota COFINS', tf.pAliqCofins ? `${tf.pAliqCofins}%` : ''),
+        buildDetailRow('PIS apurado', tf.vPis ? fmtBRL(tf.vPis) : ''),
+        buildDetailRow('COFINS apurada', tf.vCofins ? fmtBRL(tf.vCofins) : ''),
+        buildDetailRow('Tipo Ret. PIS/COFINS', safe(tf.tpRetPisCofins)),
+        buildDetailRow('Ret. Contrib. Previdenciária', tf.vRetCP ? fmtBRL(tf.vRetCP) : '', 'var(--color-danger-400)'),
+        buildDetailRow('Ret. IRRF', tf.vRetIRRF ? fmtBRL(tf.vRetIRRF) : '', 'var(--color-danger-400)'),
+        buildDetailRow('Ret. CSLL+PIS+COFINS', tf.vRetCSLL ? fmtBRL(tf.vRetCSLL) : '', 'var(--color-danger-400)'),
+        buildDetailRow('INSS', tf.vINSS ? fmtBRL(tf.vINSS) : ''),
+        buildDetailRow('IR', tf.vIR ? fmtBRL(tf.vIR) : ''),
+      ])) : ''}
+      ${hasTot ? buildSection('📊', 'Total Aproximado de Tributos', `
+        ${buildGrid3([
+          buildStatCard('Federal', tt.vTotTribFed ? `${fmtBRL(tt.vTotTribFed)}${tt.pTotTribFed ? ' · '+tt.pTotTribFed+'%' : ''}` : '—'),
+          buildStatCard('Estadual', tt.vTotTribEst ? `${fmtBRL(tt.vTotTribEst)}${tt.pTotTribEst ? ' · '+tt.pTotTribEst+'%' : ''}` : '—'),
+          buildStatCard('Municipal', tt.vTotTribMun ? `${fmtBRL(tt.vTotTribMun)}${tt.pTotTribMun ? ' · '+tt.pTotTribMun+'%' : ''}` : '—'),
+        ])}
+        ${tt.pTotTribSN ? `<div style="font-size:0.8rem;margin-top:8px;color:var(--color-neutral-400);">Simples Nacional: <strong>${tt.pTotTribSN}%</strong></div>` : ''}
+      `) : ''}`;
 
-    const hasFed = tf.CST || tf.vBCPisCofins || tf.pAliqPis || tf.vRetCP || tf.vRetIRRF || tf.vRetCSLL;
-    if (hasFed) {
-      html += `<div style="font-size:0.8rem;font-weight:600;color:var(--color-primary-300);margin:16px 0 8px;border-bottom:1px solid var(--surface-glass-border);padding-bottom:4px;">TRIBUTOS — FEDERAIS</div>`;
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">';
-      html += buildRow('CST PIS/COFINS', safe(tf.CST));
-      html += buildRow('BC PIS/COFINS', tf.vBCPisCofins ? fmtBRL(tf.vBCPisCofins) : '—');
-      html += buildRow('Alíq. PIS', tf.pAliqPis ? `${tf.pAliqPis}%` : '—');
-      html += buildRow('Alíq. COFINS', tf.pAliqCofins ? `${tf.pAliqCofins}%` : '—');
-      html += buildRow('PIS (apuração)', tf.vPis ? fmtBRL(tf.vPis) : '—');
-      html += buildRow('COFINS (apuração)', tf.vCofins ? fmtBRL(tf.vCofins) : '—');
-      html += buildRow('Tipo Ret. PIS/COFINS', safe(tf.tpRetPisCofins));
-      html += buildRow('Ret. CP', tf.vRetCP ? fmtBRL(tf.vRetCP) : '—', 'var(--color-danger-400)');
-      html += buildRow('Ret. IRRF', tf.vRetIRRF ? fmtBRL(tf.vRetIRRF) : '—', 'var(--color-danger-400)');
-      html += buildRow('Ret. CSLL (PIS+COF+CSLL)', tf.vRetCSLL ? fmtBRL(tf.vRetCSLL) : '—', 'var(--color-danger-400)');
-      html += '</div>';
-    }
-
-    const hasTot = tt.vTotTribFed || tt.vTotTribEst || tt.vTotTribMun;
-    if (hasTot) {
-      html += `<div style="font-size:0.8rem;font-weight:600;color:var(--color-primary-300);margin:16px 0 8px;border-bottom:1px solid var(--surface-glass-border);padding-bottom:4px;">TOTAL APROXIMADO DE TRIBUTOS</div>`;
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">';
-      html += `<div style="padding:8px;background:var(--surface-glass);border-radius:var(--radius-sm);text-align:center;">
-        <div style="font-size:0.72rem;color:var(--color-neutral-400);">FEDERAL</div>
-        <div style="font-weight:600;">${tt.vTotTribFed ? fmtBRL(tt.vTotTribFed) : '—'}</div>
-        <div style="font-size:0.75rem;">${tt.pTotTribFed ? tt.pTotTribFed + '%' : ''}</div>
-      </div>`;
-      html += `<div style="padding:8px;background:var(--surface-glass);border-radius:var(--radius-sm);text-align:center;">
-        <div style="font-size:0.72rem;color:var(--color-neutral-400);">ESTADUAL</div>
-        <div style="font-weight:600;">${tt.vTotTribEst ? fmtBRL(tt.vTotTribEst) : '—'}</div>
-        <div style="font-size:0.75rem;">${tt.pTotTribEst ? tt.pTotTribEst + '%' : ''}</div>
-      </div>`;
-      html += `<div style="padding:8px;background:var(--surface-glass);border-radius:var(--radius-sm);text-align:center;">
-        <div style="font-size:0.72rem;color:var(--color-neutral-400);">MUNICIPAL</div>
-        <div style="font-weight:600;">${tt.vTotTribMun ? fmtBRL(tt.vTotTribMun) : '—'}</div>
-        <div style="font-size:0.75rem;">${tt.pTotTribMun ? tt.pTotTribMun + '%' : ''}</div>
-      </div>`;
-      html += '</div>';
-      if (tt.pTotTribSN) html += `<div style="font-size:0.82rem;margin-top:4px;">Simples Nacional: ${tt.pTotTribSN}%</div>`;
-    }
-
-    const hasIbs = ib.CST || ib.cClassTrib || ib.pDifUF || ib.pDifMun || ib.pDifCBS;
-    if (hasIbs) {
-      html += `<div style="font-size:0.8rem;font-weight:600;color:var(--color-primary-300);margin:16px 0 8px;border-bottom:1px solid var(--surface-glass-border);padding-bottom:4px;">IBS / CBS (REFORMA TRIBUTÁRIA)</div>`;
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">';
-      html += buildRow('CST IBS/CBS', safe(ib.CST));
-      html += buildRow('Classificação Trib.', safe(ib.cClassTrib));
-      html += buildRow('Créd. Presumido', safe(ib.cCredPres));
-      html += buildRow('CST Regular', safe(ib.CSTReg));
-      html += buildRow('Class. Trib. Regular', safe(ib.cClassTribReg));
-      html += buildRow('Diferimento IBS UF', ib.pDifUF ? `${ib.pDifUF}%` : '—');
-      html += buildRow('Diferimento IBS Mun', ib.pDifMun ? `${ib.pDifMun}%` : '—');
-      html += buildRow('Diferimento CBS', ib.pDifCBS ? `${ib.pDifCBS}%` : '—');
-      html += buildRow('Consumidor Final', ib.indFinal === '1' ? 'Sim' : ib.indFinal === '0' ? 'Não' : '—');
-      html += buildRow('Indicador Operação', safe(ib.cIndOp));
-      html += buildRow('ZFM/ALC', ib.indZFMALC === '1' ? 'Sim' : '—');
-      html += buildRow('Tipo Operação Gov.', safe(ib.tpOper));
-      html += buildRow('Tipo Ente Gov.', safe(ib.tpEnteGov));
-      html += '</div>';
-    }
-
+    // Aba 5 — Outros
+    const hasIbs    = ib.CST || ib.cClassTrib || ib.pDifUF || ib.pDifMun || ib.pDifCBS;
     const hasComExt = ce.mecAFComexP || ce.mecAFComexT || ce.nDI || ce.nRE;
-    if (hasComExt) {
-      html += `<div style="font-size:0.8rem;font-weight:600;color:var(--color-primary-300);margin:16px 0 8px;border-bottom:1px solid var(--surface-glass-border);padding-bottom:4px;">COMÉRCIO EXTERIOR</div>`;
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">';
-      html += buildRow('Mecanismo Prestador', safe(ce.mecAFComexP));
-      html += buildRow('Mecanismo Tomador', safe(ce.mecAFComexT));
-      html += buildRow('Mov. Temp. Bens', safe(ce.movTempBens));
-      html += buildRow('Nº Decl. Importação', safe(ce.nDI));
-      html += buildRow('Nº Reg. Exportação', safe(ce.nRE));
-      html += buildRow('MDIC', ce.mdic === '1' ? 'Sim' : '—');
-      html += '</div>';
-    }
+    const hasObra   = ob.inscImobFisc || ob.cObra;
+    const hasEvt    = ev.xNome || ev.idAtvEvt;
+    const hasImov   = im.inscImobFisc || im.cCIB;
+    const docsRef   = n.documentosReferenciados || [];
 
-    const hasObra = ob.inscImobFisc || ob.cObra;
-    if (hasObra) {
-      html += `<div style="font-size:0.8rem;font-weight:600;color:var(--color-primary-300);margin:16px 0 8px;border-bottom:1px solid var(--surface-glass-border);padding-bottom:4px;">CONSTRUÇÃO CIVIL / OBRA</div>`;
-      html += buildRow('Insc. Imobiliária', safe(ob.inscImobFisc));
-      html += buildRow('Código Obra (CNO/CEI)', safe(ob.cObra));
-      const endObra = buildEnderecoHtml(ob.endereco);
-      if (endObra) html += `<div style="font-size:0.82rem;">${endObra}</div>`;
-    }
+    const tabOutros = `
+      ${hasIbs ? buildSection('⚖️', 'IBS / CBS (Reforma Tributária)', buildGrid2([
+        buildDetailRow('CST IBS/CBS', safe(ib.CST)),
+        buildDetailRow('Classificação Tributária', safe(ib.cClassTrib)),
+        buildDetailRow('Crédito Presumido', safe(ib.cCredPres)),
+        buildDetailRow('CST Regular', safe(ib.CSTReg)),
+        buildDetailRow('Class. Trib. Regular', safe(ib.cClassTribReg)),
+        buildDetailRow('Diferimento IBS UF', ib.pDifUF ? `${ib.pDifUF}%` : ''),
+        buildDetailRow('Diferimento IBS Mun', ib.pDifMun ? `${ib.pDifMun}%` : ''),
+        buildDetailRow('Diferimento CBS', ib.pDifCBS ? `${ib.pDifCBS}%` : ''),
+        buildDetailRow('Consumidor Final', ib.indFinal === '1' ? 'Sim' : ib.indFinal === '0' ? 'Não' : ''),
+        buildDetailRow('Indicador Operação', safe(ib.cIndOp)),
+        buildDetailRow('ZFM / ALC', ib.indZFMALC === '1' ? 'Sim' : ''),
+        buildDetailRow('Tipo Operação Governamental', safe(ib.tpOper)),
+        buildDetailRow('Tipo Ente Governamental', safe(ib.tpEnteGov)),
+      ])) : ''}
+      ${hasComExt ? buildSection('🌐', 'Comércio Exterior', buildGrid2([
+        buildDetailRow('Mecanismo AF Prestador', safe(ce.mecAFComexP)),
+        buildDetailRow('Mecanismo AF Tomador', safe(ce.mecAFComexT)),
+        buildDetailRow('Movimentação Temp. Bens', safe(ce.movTempBens)),
+        buildDetailRow('Nº Declaração Importação', safe(ce.nDI)),
+        buildDetailRow('Nº Registro Exportação', safe(ce.nRE)),
+        buildDetailRow('MDIC', ce.mdic === '1' ? 'Sim' : ''),
+      ])) : ''}
+      ${hasObra ? buildSection('🏗️', 'Construção Civil / Obra', buildGrid2([
+        buildDetailRow('Inscrição Imobiliária Fiscal', safe(ob.inscImobFisc)),
+        buildDetailRow('Código Obra (CNO/CEI)', safe(ob.cObra)),
+        buildDetailRow('Endereço da Obra', buildEnderecoHtml(ob.endereco)),
+      ])) : ''}
+      ${hasEvt ? buildSection('🎪', 'Evento / Atividade', buildGrid2([
+        buildDetailRow('Nome do Evento', safe(ev.xNome)),
+        buildDetailRow('ID Atividade', safe(ev.idAtvEvt)),
+        buildDetailRow('Período', `${fmtDataCurta(ev.dtIni)} a ${fmtDataCurta(ev.dtFim)}`),
+      ])) : ''}
+      ${hasImov ? buildSection('🏠', 'Imóvel', buildGrid2([
+        buildDetailRow('Inscrição Imobiliária Fiscal', safe(im.inscImobFisc)),
+        buildDetailRow('CIB', safe(im.cCIB)),
+        buildDetailRow('Endereço', buildEnderecoHtml(im.endereco)),
+      ])) : ''}
+      ${docsRef.length > 0 ? buildSection('📎', `Documentos Referenciados (${docsRef.length})`, docsRef.map((d, i) => `
+        <div style="padding:8px 10px;background:var(--surface-glass);border-radius:var(--radius-sm);margin-bottom:6px;font-size:0.81rem;display:flex;gap:8px;align-items:center;">
+          <span style="color:var(--color-neutral-500);min-width:22px;">#${i+1}</span>
+          <div>
+            <div style="font-family:monospace;font-size:0.79rem;word-break:break-all;">${safe(d.chaveDFe)}</div>
+            <div style="color:var(--color-neutral-400);">Tipo: ${safe(d.tipoChaveDFe)} ${d.vlrReeRepRes ? '· '+fmtBRL(d.vlrReeRepRes) : ''}</div>
+          </div>
+        </div>`).join('')) : ''}
+      ${!hasIbs && !hasComExt && !hasObra && !hasEvt && !hasImov && !docsRef.length
+        ? '<div style="color:var(--color-neutral-500);font-size:0.85rem;padding:20px 0;text-align:center;">Nenhum dado adicional para esta NFS-e.</div>' : ''}`;
 
-    const hasEvt = ev.xNome || ev.idAtvEvt;
-    if (hasEvt) {
-      html += `<div style="font-size:0.8rem;font-weight:600;color:var(--color-primary-300);margin:16px 0 8px;border-bottom:1px solid var(--surface-glass-border);padding-bottom:4px;">EVENTO / ATIVIDADE</div>`;
-      html += buildRow('Nome', safe(ev.xNome));
-      html += buildRow('ID Atividade', safe(ev.idAtvEvt));
-      html += buildRow('Período', `${fmtDataCurta(ev.dtIni)} a ${fmtDataCurta(ev.dtFim)}`);
-    }
+    const tabContents = [tabGeral, tabPartes, tabServico, tabValores, tabTributos, tabOutros];
 
-    const hasImov = im.inscImobFisc || im.cCIB;
-    if (hasImov) {
-      html += `<div style="font-size:0.8rem;font-weight:600;color:var(--color-primary-300);margin:16px 0 8px;border-bottom:1px solid var(--surface-glass-border);padding-bottom:4px;">IMÓVEL</div>`;
-      html += buildRow('Insc. Imobiliária', safe(im.inscImobFisc));
-      html += buildRow('CIB', safe(im.cCIB));
-      const endIm = buildEnderecoHtml(im.endereco);
-      if (endIm) html += `<div style="font-size:0.82rem;">${endIm}</div>`;
-    }
+    document.getElementById('detalhes-conteudo').innerHTML = `
+      ${alertBanner}
+      ${header}
+      ${summary}
+      ${tabsHtml}
+      <div id="det-tab-body" style="padding:20px 24px;min-height:200px;">
+        ${tabContents[0]}
+      </div>`;
 
-    const docsRef = n.documentosReferenciados || [];
-    if (docsRef.length > 0) {
-      html += `<div style="font-size:0.8rem;font-weight:600;color:var(--color-primary-300);margin:16px 0 8px;border-bottom:1px solid var(--surface-glass-border);padding-bottom:4px;">DOCUMENTOS REFERENCIADOS (${docsRef.length})</div>`;
-      docsRef.forEach((d, i) => {
-        html += `<div style="padding:6px 8px;background:var(--surface-glass);border-radius:var(--radius-sm);margin-bottom:4px;font-size:0.82rem;">
-          #${i + 1} — Chave: ${safe(d.chaveDFe)} | Tipo: ${safe(d.tipoChaveDFe)} | Valor: ${d.vlrReeRepRes ? fmtBRL(d.vlrReeRepRes) : '—'}
-        </div>`;
+    // Lógica de abas
+    document.querySelectorAll('.det-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.tab, 10);
+        document.querySelectorAll('.det-tab-btn').forEach(b => {
+          b.style.background = 'transparent';
+          b.style.color = 'var(--color-neutral-400)';
+        });
+        btn.style.background = 'var(--color-primary-500)';
+        btn.style.color = '#fff';
+        document.getElementById('det-tab-body').innerHTML = tabContents[idx];
       });
-    }
+    });
 
-    if (g.xPed) html += `<div style="margin-top:10px;font-size:0.82rem;">Pedido/OS: <strong>${g.xPed}</strong></div>`;
-    if (g.idDocTec) html += `<div style="font-size:0.82rem;">Doc. Técnico: <strong>${g.idDocTec}</strong></div>`;
-    if (g.docRef) html += `<div style="font-size:0.82rem;">Doc. Referência: <strong>${g.docRef}</strong></div>`;
-
-    document.getElementById('detalhes-conteudo').innerHTML = html;
     const modal = document.getElementById('modal-detalhes');
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
+    modal.scrollTop = 0;
   }
 
   document.getElementById('fechar-modal-det').addEventListener('click', () => {

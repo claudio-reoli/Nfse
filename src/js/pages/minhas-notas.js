@@ -40,6 +40,13 @@ export async function renderMinhasNotas(container) {
     </div>
   `;
 
+  // Busca informações públicas do município para o cabeçalho do DANFSe
+  let munInfo = { nome: '', prefeitura: '', fone: '', email: '', brasao: '' };
+  try {
+    const munRes = await fetch(`${getBackendUrl()}/municipio/info`);
+    if (munRes.ok) munInfo = await munRes.json();
+  } catch (_) { /* usa valores vazios se falhar */ }
+
   try {
     const res = await fetch(`${getBackendUrl()}/notes?cnpj=${session?.cnpj || ''}`, {
       headers: { 'Authorization': `Bearer ${session?.token || ''}` }
@@ -128,7 +135,13 @@ export async function renderMinhasNotas(container) {
         const localPrest = serv.xLocPrestacao || String(serv.cLocPrestacao || ti.cLocIncid || '');
 
         openDANFSe({
-          mun: { nome: g.xLocEmi || '', prefeitura: '', fone: '', email: '', brasao: '' },
+          mun: {
+            nome:       munInfo.nome       || g.xLocEmi || '',
+            prefeitura: munInfo.prefeitura || '',
+            fone:       munInfo.fone       || '',
+            email:      munInfo.email      || '',
+            brasao:     munInfo.brasao     || '',
+          },
           nNFSe:      g.nNFSe    || nota.nNFSe || '',
           chaveAcesso:nota.chaveAcesso || '',
           dCompet:    g.dCompet  || nota.competencia || '',

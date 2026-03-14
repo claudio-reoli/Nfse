@@ -292,6 +292,31 @@ export async function getApuracoesByCnpj(cnpj) {
   return rowsToCamel(r.rows);
 }
 
+export async function getApuracoesByCompetencia(competencia) {
+  const r = await pool.query(
+    'SELECT * FROM apuracoes WHERE competencia = $1 ORDER BY cnpj ASC',
+    [competencia]
+  );
+  return rowsToCamel(r.rows);
+}
+
+/** Retorna competências disponíveis na base de notas e nas apurações já registradas */
+export async function getCompetenciasDisponiveis() {
+  const [rNotas, rApu] = await Promise.all([
+    pool.query(`SELECT DISTINCT LEFT(competencia, 7) AS comp FROM notas
+                WHERE competencia IS NOT NULL AND competencia != ''
+                ORDER BY comp DESC`),
+    pool.query(`SELECT DISTINCT LEFT(competencia, 7) AS comp FROM apuracoes
+                WHERE competencia IS NOT NULL AND competencia != ''
+                ORDER BY comp DESC`),
+  ]);
+  const set = new Set([
+    ...rNotas.rows.map(r => r.comp),
+    ...rApu.rows.map(r => r.comp),
+  ]);
+  return [...set].sort((a, b) => b.localeCompare(a));
+}
+
 export async function deleteApuracoesByCompetenciaAndStatus(competencia, status) {
   await pool.query(
     'DELETE FROM apuracoes WHERE competencia = $1 AND status = $2',

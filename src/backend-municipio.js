@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import https from 'https';
@@ -11,6 +11,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import forge from 'node-forge';
 import zlib from 'zlib';
+import { spawn, spawnSync } from 'child_process';
+import crypto from 'crypto';
 import * as db from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -18,7 +20,9 @@ dotenv.config();
 
 const app = express();
 
-const PORT = process.env.PORT || 3099;
+const PORT    = process.env.PORT    || 3099;
+const IA_PORT = process.env.IA_PORT || 8001;
+const IA_URL  = `http://localhost:${IA_PORT}`;
 const JWT_SECRET = process.env.JWT_SECRET || 'freire-secret-key-2026';
 const CERT_PATH = process.env.CERT_PATH || '';
 const CERT_PASSPHRASE = process.env.CERT_PASSPHRASE || '';
@@ -57,7 +61,7 @@ function rateLimit(windowMs, maxRequests) {
 
     entry.count++;
     if (entry.count > maxRequests) {
-      return res.status(429).json({ error: 'Muitas requisições. Tente novamente em instantes.' });
+      return res.status(429).json({ error: 'Muitas requisiÃ§Ãµes. Tente novamente em instantes.' });
     }
     next();
   };
@@ -74,11 +78,11 @@ async function ensureDataDir() {
 async function seedDefaultUsersIfEmpty() {
   const defaults = [
     // Contribuintes
-    { cpf: '111.222.333-44', name: 'José da Silva', email: 'jose.silva@exemplo.com', celular: '11999990001', role: 'MASTER', userType: 'contribuinte', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'GOVBR_OURO', cnpjVinculado: '12345678000100' },
-    { cpf: '999.888.777-66', name: 'João Contador', email: 'joao.contador@exemplo.com', celular: '11999990002', role: 'CONTADOR', userType: 'contribuinte', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'CERTIFICADO_A1_A3', cnpjVinculado: '12345678000100' },
+    { cpf: '111.222.333-44', name: 'JosÃ© da Silva', email: 'jose.silva@exemplo.com', celular: '11999990001', role: 'MASTER', userType: 'contribuinte', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'GOVBR_OURO', cnpjVinculado: '12345678000100' },
+    { cpf: '999.888.777-66', name: 'JoÃ£o Contador', email: 'joao.contador@exemplo.com', celular: '11999990002', role: 'CONTADOR', userType: 'contribuinte', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'CERTIFICADO_A1_A3', cnpjVinculado: '12345678000100' },
     { cpf: '444.555.666-77', name: 'Maria Faturista', email: 'maria.faturista@exemplo.com', celular: '11999990003', role: 'FATURISTA', userType: 'contribuinte', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'GOVBR_OURO', cnpjVinculado: '12345678000100' },
     { cpf: '555.666.777-88', name: 'Ana Auditora', email: 'ana.auditora@exemplo.com', celular: '11999990004', role: 'AUDITOR', userType: 'contribuinte', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'GOVBR_OURO', cnpjVinculado: '12345678000100' },
-    // Município
+    // MunicÃ­pio
     { cpf: '123.456.789-00', name: 'Admin Sefin', email: 'admin.sefin@municipio.gov.br', celular: '11988880001', role: 'GESTOR', userType: 'municipio', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'CERTIFICADO_A1_A3', cnpjVinculado: '' },
     { cpf: '333.444.555-66', name: 'Carlos Fiscal', email: 'carlos.fiscal@municipio.gov.br', celular: '11988880002', role: 'FISCAL', userType: 'municipio', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'CERTIFICADO_A1_A3', cnpjVinculado: '' },
     { cpf: '777.888.999-11', name: 'Auditor Chefe', email: 'auditor.chefe@municipio.gov.br', celular: '11988880003', role: 'AUDITOR', userType: 'municipio', passwordHash: bcrypt.hashSync('12345678', 10), authLevel: 'CERTIFICADO_A1_A3', cnpjVinculado: '' },
@@ -87,7 +91,7 @@ async function seedDefaultUsersIfEmpty() {
   const users = await db.getUsers();
   if (users.length === 0) {
     for (const u of defaults) await db.insertUser(u);
-    console.log('[ DB ] Usuários padrão criados.');
+    console.log('[ DB ] UsuÃ¡rios padrÃ£o criados.');
     return;
   }
   const rolesPresent = new Set(users.map(u => `${u.userType}:${u.role}`));
@@ -103,7 +107,7 @@ async function seedDefaultUsersIfEmpty() {
       }
     }
   }
-  if (added > 0) console.log(`[ DB ] ${added} usuário(s) adicionado(s) para perfis faltantes.`);
+  if (added > 0) console.log(`[ DB ] ${added} usuÃ¡rio(s) adicionado(s) para perfis faltantes.`);
 }
 
 // Initialize DB on startup
@@ -112,12 +116,12 @@ async function seedDefaultUsersIfEmpty() {
   try {
     await db.runMigrations();
     await seedDefaultUsersIfEmpty();
-    console.log('[ DB ] PostgreSQL conectado e migrações aplicadas.');
+    console.log('[ DB ] PostgreSQL conectado e migraÃ§Ãµes aplicadas.');
   } catch (err) {
     console.error('[ DB ] Erro ao conectar PostgreSQL:', err.message);
-    // Deadlock em migração concorrente (node --watch) — aguarda e tenta novamente
+    // Deadlock em migraÃ§Ã£o concorrente (node --watch) â€” aguarda e tenta novamente
     if (err.code === '40P01' || err.message?.includes('deadlock')) {
-      console.warn('[ DB ] Deadlock detectado nas migrações — aguardando 3s e reiniciando...');
+      console.warn('[ DB ] Deadlock detectado nas migraÃ§Ãµes â€” aguardando 3s e reiniciando...');
       await new Promise(r => setTimeout(r, 3000));
       try {
         await db.runMigrations();
@@ -148,7 +152,7 @@ function loadCertAgent() {
 }
 
 // ==========================================
-// MÓDULO 1: Sincronização Passiva ADN (Worker)
+// MÃ“DULO 1: SincronizaÃ§Ã£o Passiva ADN (Worker)
 // ==========================================
 
 function decodeArquivoXml(arquivoXml) {
@@ -604,56 +608,56 @@ function parseNfseFromAdn(doc, ibge) {
 
 async function syncNfsFromAdn() {
   const config = await db.getConfig();
-  // Ambiente vem da tela de Configurações do município: sandbox (Produção Restrita) ou production (Produção)
+  // Ambiente vem da tela de ConfiguraÃ§Ãµes do municÃ­pio: sandbox (ProduÃ§Ã£o Restrita) ou production (ProduÃ§Ã£o)
   const ambiente = config.ambiente || 'sandbox';
   const IBGE_MUNICIPIO = config.ibge;
   const adnBaseUrl = (config.urlAdnMun || process.env.ADN_MUN_URL || AMBIENTES[ambiente]?.adnMun)?.trim() || AMBIENTES[ambiente]?.adnMun;
-  // Usa o maior entre sync_state e max(nsu) das notas — garante continuidade após importações anteriores
+  // Usa o maior entre sync_state e max(nsu) das notas â€” garante continuidade apÃ³s importaÃ§Ãµes anteriores
   const maxNsu = await db.getMaxNsuParaContinuar();
 
   if (!adnBaseUrl) {
     const currentMax = await db.getMaxNsu();
-    return { maxNsu: currentMax, novaNotas: 0, fonte: 'erro', erro: 'URL ADN Municípios não configurada. Defina o ambiente em Configurações (Sandbox ou Produção) ou ADN_MUN_URL.' };
+    return { maxNsu: currentMax, novaNotas: 0, fonte: 'erro', erro: 'URL ADN MunicÃ­pios nÃ£o configurada. Defina o ambiente em ConfiguraÃ§Ãµes (Sandbox ou ProduÃ§Ã£o) ou ADN_MUN_URL.' };
   }
 
-  const ambLabel = ambiente === 'production' ? 'Produção' : 'Produção Restrita (Sandbox)';
+  const ambLabel = ambiente === 'production' ? 'ProduÃ§Ã£o' : 'ProduÃ§Ã£o Restrita (Sandbox)';
   const certOk = fsSync.existsSync(MUN_CERT_PATH) || (fsSync.existsSync(MUN_KEY_PEM_PATH) && fsSync.existsSync(MUN_CERT_PEM_PATH));
   if (!certOk) {
     const currentMax = await db.getMaxNsu();
-    return { maxNsu: currentMax, novaNotas: 0, fonte: 'erro', erro: 'Certificado municipal ICP-Brasil não configurado. A API ADN exige mTLS. Envie o certificado em Configurações > Certificado.' };
+    return { maxNsu: currentMax, novaNotas: 0, fonte: 'erro', erro: 'Certificado municipal ICP-Brasil nÃ£o configurado. A API ADN exige mTLS. Envie o certificado em ConfiguraÃ§Ãµes > Certificado.' };
   }
 
   const lastEmpty = await db.getLastEmptySyncAt();
   if (lastEmpty) {
     const diff = (Date.now() - new Date(lastEmpty).getTime()) / 1000 / 60;
     if (diff < 60) {
-      console.log(`[ ADN Worker ] Rate-limit: aguardando 1h desde último sync vazio (${Math.round(60 - diff)} min restantes).`);
-      return { maxNsu, novaNotas: 0, fonte: 'rate_limit', aviso: 'Aguardando 1 hora desde último sync sem documentos.' };
+      console.log(`[ ADN Worker ] Rate-limit: aguardando 1h desde Ãºltimo sync vazio (${Math.round(60 - diff)} min restantes).`);
+      return { maxNsu, novaNotas: 0, fonte: 'rate_limit', aviso: 'Aguardando 1 hora desde Ãºltimo sync sem documentos.' };
     }
   }
 
   console.log(`[ ADN Worker ] Varredura a partir do NSU: ${maxNsu}...`);
-  console.log(`[ ADN Worker ] Município: ${config.nome || IBGE_MUNICIPIO} | CNPJ: ${config.cnpj || 'N/A'}`);
+  console.log(`[ ADN Worker ] MunicÃ­pio: ${config.nome || IBGE_MUNICIPIO} | CNPJ: ${config.cnpj || 'N/A'}`);
   console.log(`[ ADN Worker ] Ambiente: ${ambLabel} (${ambiente}) | URL base: ${adnBaseUrl}`);
 
   const agent = loadMunCertAgent();
   const ultNSU = maxNsu;
 
-  // URLs: ACBr/gov.br indicam adn.../dfe na RAIZ. Doc também cita municipios/DFe.
+  // URLs: ACBr/gov.br indicam adn.../dfe na RAIZ. Doc tambÃ©m cita municipios/DFe.
   const baseMun = adnBaseUrl.replace(/\/$/, '');
   const baseRoot = baseMun.replace(/\/(municipios|contribuintes|dfe|DFe)\/?$/, '') || baseMun;
-  const nsuStr = String(ultNSU).padStart(15, '0');  // NSU pode exigir padding (15 dígitos conforme NF-e)
+  const nsuStr = String(ultNSU).padStart(15, '0');  // NSU pode exigir padding (15 dÃ­gitos conforme NF-e)
 
   const urlsToTry = [
-    `${baseMun}/DFe/${ultNSU}`,                                     // Doc: municipios/DFe/{NSU} — tentar primeiro
+    `${baseMun}/DFe/${ultNSU}`,                                     // Doc: municipios/DFe/{NSU} â€” tentar primeiro
     `${baseMun}/DFe?ultNsu=${ultNSU}`,                              // Query param variant
     `${baseMun}/dfe/${ultNSU}`,                                     // Case-insensitive variant
-    `${baseMun}/DFe/${nsuStr}`,                                     // NSU com padding 15 dígitos
+    `${baseMun}/DFe/${nsuStr}`,                                     // NSU com padding 15 dÃ­gitos
     `${baseMun}/DFe?ultNsu=${nsuStr}`,                              // Query param com padding
     `${baseRoot}/municipios/DFe/${ultNSU}`,                         // Raiz + municipios
     `${baseRoot}/dfe/${ultNSU}`,                                    // ACBr: raiz/dfe
-    `${baseRoot}/DFe/${ultNSU}`,                                    // Raiz maiúsculo
-    `${baseMun}/v1/DFe/${ultNSU}`,                                  // Versão /v1/
+    `${baseRoot}/DFe/${ultNSU}`,                                    // Raiz maiÃºsculo
+    `${baseMun}/v1/DFe/${ultNSU}`,                                  // VersÃ£o /v1/
     `${baseMun}/api/DFe/${ultNSU}`,                                 // /api/ prefix
     `${baseRoot}/api/dfe/${ultNSU}`,
     (AMBIENTES[ambiente === 'sandbox' ? 'production' : 'sandbox']?.adnMun || baseRoot).replace(/\/$/, '') + `/DFe/${ultNSU}`,
@@ -661,7 +665,7 @@ async function syncNfsFromAdn() {
 
   let response = null;
   let lastError = null;
-  const urlResults = [];  // Diagnóstico: registra status de cada URL tentada
+  const urlResults = [];  // DiagnÃ³stico: registra status de cada URL tentada
 
   const reqHeaders = {
     'Accept': 'application/json',
@@ -678,11 +682,11 @@ async function syncNfsFromAdn() {
         httpsAgent: agent,
         headers: reqHeaders,
         timeout: 20000,
-        validateStatus: () => true,  // Nunca lança erro por status HTTP — analisa corpo manualmente
+        validateStatus: () => true,  // Nunca lanÃ§a erro por status HTTP â€” analisa corpo manualmente
       });
 
       const body = r.data;
-      // ADN retorna HTTP 404 para "sem documentos" com JSON válido — isso é resposta normal, não erro de rota
+      // ADN retorna HTTP 404 para "sem documentos" com JSON vÃ¡lido â€” isso Ã© resposta normal, nÃ£o erro de rota
       const isAdnJson = body && typeof body === 'object' && (
         body.LoteDFe !== undefined ||
         body.StatusProcessamento !== undefined ||
@@ -691,15 +695,15 @@ async function syncNfsFromAdn() {
       );
 
       if (r.status === 200 || (r.status < 300) || isAdnJson) {
-        // Resposta válida (com ou sem documentos)
-        const nota404 = r.status === 404 ? ' (HTTP 404 — ADN sinaliza "sem documentos")' : '';
+        // Resposta vÃ¡lida (com ou sem documentos)
+        const nota404 = r.status === 404 ? ' (HTTP 404 â€” ADN sinaliza "sem documentos")' : '';
         urlResults.push({ url: adnUrl, status: r.status, ok: true, nota: isAdnJson ? `JSON ADN${nota404}` : '' });
-        console.log(`[ ADN Worker ] ✓ Resposta válida de ${adnUrl} [HTTP ${r.status}]${nota404}`);
+        console.log(`[ ADN Worker ] âœ“ Resposta vÃ¡lida de ${adnUrl} [HTTP ${r.status}]${nota404}`);
         response = r;
         break;
       } else {
         urlResults.push({ url: adnUrl, status: r.status, ok: false });
-        console.warn(`[ ADN Worker ] HTTP ${r.status} em ${adnUrl} (sem JSON ADN válido), tentando próxima URL...`);
+        console.warn(`[ ADN Worker ] HTTP ${r.status} em ${adnUrl} (sem JSON ADN vÃ¡lido), tentando prÃ³xima URL...`);
         lastError = { message: `HTTP ${r.status}`, response: r };
         continue;
       }
@@ -713,16 +717,16 @@ async function syncNfsFromAdn() {
     }
   }
 
-  // Log de diagnóstico das URLs tentadas
+  // Log de diagnÃ³stico das URLs tentadas
   console.log(`[ ADN Worker ] Resultados das URLs tentadas:`);
   for (const r of urlResults) {
-    console.log(`  ${r.ok ? '✓' : '✗'} [${r.status}] ${r.url}`);
+    console.log(`  ${r.ok ? 'âœ“' : 'âœ—'} [${r.status}] ${r.url}`);
   }
 
   try {
     if (!response) {
-      // Todas as URLs falharam — lança o último erro para o catch abaixo tratá-lo adequadamente
-      const errDiag = new Error(`Todas as ${urlResults.length} URLs tentadas falharam. Último erro: ${lastError?.message}`);
+      // Todas as URLs falharam â€” lanÃ§a o Ãºltimo erro para o catch abaixo tratÃ¡-lo adequadamente
+      const errDiag = new Error(`Todas as ${urlResults.length} URLs tentadas falharam. Ãšltimo erro: ${lastError?.message}`);
       errDiag.response = lastError?.response;
       errDiag._urlResults = urlResults;
       throw errDiag;
@@ -764,13 +768,13 @@ async function syncNfsFromAdn() {
 
     if (!Array.isArray(docs) || docs.length === 0) {
       const semDocs = respStatus === 'NENHUM_DOCUMENTO_LOCALIZADO' || payload.Erros?.some(e => e.Codigo === 'E2020');
-      console.log(`[ ADN Worker ] Nenhum documento novo retornado pela ADN. (${semDocs ? 'município sem NFS-e no ADN ainda' : respStatus})`);
+      console.log(`[ ADN Worker ] Nenhum documento novo retornado pela ADN. (${semDocs ? 'municÃ­pio sem NFS-e no ADN ainda' : respStatus})`);
       const maxNsuRet = payload.maxNSU ?? payload.MaxNSU ?? maxNsu;
       if (maxNsuRet === maxNsu) {
         await db.setLastEmptySyncAt();
       }
       const aviso = semDocs
-        ? 'Município autenticado no ADN, mas sem NFS-e distribuídas ainda. Aguarde emissão de notas ou use "Simular Importação" para testes.'
+        ? 'MunicÃ­pio autenticado no ADN, mas sem NFS-e distribuÃ­das ainda. Aguarde emissÃ£o de notas ou use "Simular ImportaÃ§Ã£o" para testes.'
         : undefined;
       return { maxNsu, novaNotas: 0, fonte: 'ADN', resposta: respStatus, ...(aviso ? { aviso } : {}) };
     }
@@ -795,8 +799,8 @@ async function syncNfsFromAdn() {
             await db.updateNotaStatus(chaveRef, 'Cancelada');
             console.log(`[ ADN Worker ] Evento cancelamento aplicado: ${chaveRef}`);
           } else if (chaveRef && tpEvento === 'e101103') {
-            await db.updateNotaStatus(chaveRef, 'Substituída');
-            console.log(`[ ADN Worker ] Evento substituição aplicado: ${chaveRef}`);
+            await db.updateNotaStatus(chaveRef, 'SubstituÃ­da');
+            console.log(`[ ADN Worker ] Evento substituiÃ§Ã£o aplicado: ${chaveRef}`);
           }
           const docNsu = Number(doc.NSU || 0);
           if (docNsu > maxNsuRecebido) maxNsuRecebido = docNsu;
@@ -828,7 +832,7 @@ async function syncNfsFromAdn() {
     }
 
     if (numErros > 0) {
-      console.log(`[ ADN Worker ] ${numErros} documentos não puderam ser processados.`);
+      console.log(`[ ADN Worker ] ${numErros} documentos nÃ£o puderam ser processados.`);
     }
 
     await db.updateMaxNsu(maxNsuRecebido);
@@ -841,31 +845,31 @@ async function syncNfsFromAdn() {
     const respData = error.response?.data;
     const diagUrls = error._urlResults || urlResults || [];
     const msg = respData?.xMotivo || respData?.error || respData?.message || error.message;
-    console.warn(`[ ADN Worker ] API ADN indisponível (${status || 'N/A'}): ${msg}`);
+    console.warn(`[ ADN Worker ] API ADN indisponÃ­vel (${status || 'N/A'}): ${msg}`);
     if (respData) console.warn(`[ ADN Worker ] Resposta completa:`, JSON.stringify(respData).substring(0, 500));
     console.log('[ ADN Worker ] Nenhuma nota importada nesta tentativa.');
 
-    const ambLabel = ambiente === 'production' ? 'Produção' : 'Produção Restrita (Sandbox)';
+    const ambLabel = ambiente === 'production' ? 'ProduÃ§Ã£o' : 'ProduÃ§Ã£o Restrita (Sandbox)';
     const certOk = fsSync.existsSync(MUN_KEY_PEM_PATH) && fsSync.existsSync(MUN_CERT_PEM_PATH);
     const currentMax = await db.getMaxNsu();
 
-    // Diagnóstico detalhado — inclui quais URLs foram tentadas e seus status
+    // DiagnÃ³stico detalhado â€” inclui quais URLs foram tentadas e seus status
     const diagSummary = diagUrls.length > 0
       ? ` URLs tentadas: ${diagUrls.map(r => `[${r.status}] ${r.url.replace(/.*\/(municipios|contribuintes)/, '...')}`).join(', ')}.`
       : '';
 
     let erroMsg;
     if (!certOk) {
-      erroMsg = `ADN 404 (${ambLabel}): Certificado municipal não configurado. Envie o certificado ICP-Brasil da Prefeitura em Configurações > Certificado.`;
+      erroMsg = `ADN 404 (${ambLabel}): Certificado municipal nÃ£o configurado. Envie o certificado ICP-Brasil da Prefeitura em ConfiguraÃ§Ãµes > Certificado.`;
     } else if (diagUrls.every(r => r.status === 404 || r.status === '404')) {
-      erroMsg = `ADN indisponível (${ambLabel}): O servidor retornou 404 em todas as ${diagUrls.length} URLs tentadas.${diagSummary} Possíveis causas: (1) Município não cadastrado no ADN; (2) URL base incorreta — use "URL ADN Municípios (override)" em Configurações; (3) API ainda não disponível neste ambiente. Use o Modo Simulação para testes.`;
+      erroMsg = `ADN indisponÃ­vel (${ambLabel}): O servidor retornou 404 em todas as ${diagUrls.length} URLs tentadas.${diagSummary} PossÃ­veis causas: (1) MunicÃ­pio nÃ£o cadastrado no ADN; (2) URL base incorreta â€” use "URL ADN MunicÃ­pios (override)" em ConfiguraÃ§Ãµes; (3) API ainda nÃ£o disponÃ­vel neste ambiente. Use o Modo SimulaÃ§Ã£o para testes.`;
     } else {
       erroMsg = `ADN erro ${status || '?'} (${ambLabel}): ${msg}.${diagSummary}`;
     }
 
     // Modo fallback: ADN_SKIP_404=1 retorna sucesso silencioso (permite usar sistema com dados locais)
     if (process.env.ADN_SKIP_404 === '1') {
-      console.log('[ ADN Worker ] ADN_SKIP_404=1: retornando sucesso sem importar (API indisponível).');
+      console.log('[ ADN Worker ] ADN_SKIP_404=1: retornando sucesso sem importar (API indisponÃ­vel).');
       return { maxNsu: currentMax, novaNotas: 0, fonte: 'adn_indisponivel', aviso: erroMsg, diagnostico: diagUrls };
     }
 
@@ -874,7 +878,7 @@ async function syncNfsFromAdn() {
 }
 
 // ==========================================
-// MÓDULO 2: Motor de Apuração
+// MÃ“DULO 2: Motor de ApuraÃ§Ã£o
 // ==========================================
 
 async function gerarApuracaoMensal(competenciaDesejada) {
@@ -898,7 +902,7 @@ async function gerarApuracaoMensal(competenciaDesejada) {
     const vServ = nota.valores?.vServ ?? nota.valorServico ?? 0;
     const pAliq = nota.tributos?.issqn?.pAliq ?? nota.aliquota ?? 0;
     const retido = nota.tributos?.issqn?.tpRetISSQN === '2' || nota.tributos?.issqn?.tpRetISSQN === '3' || nota.issRetidoFonte === true;
-    // pAliq pode estar em decimal (0.05) ou percentual inteiro (5) — normalizar para decimal
+    // pAliq pode estar em decimal (0.05) ou percentual inteiro (5) â€” normalizar para decimal
     const pAliqDecimal = (pAliq && pAliq > 1) ? pAliq / 100 : (pAliq || 0);
     const impostoDaNota = vServ * pAliqDecimal;
     let cnpjDevedor = retido
@@ -932,13 +936,13 @@ async function gerarApuracaoMensal(competenciaDesejada) {
 }
 
 // ==========================================
-// MÓDULO 3: Autenticação e Segurança
+// MÃ“DULO 3: AutenticaÃ§Ã£o e SeguranÃ§a
 // ==========================================
 
-// URLs conforme documentação oficial (requisitos-nfse-rtc-v2.md, Fontes/manual-municipios-apis-adn)
-// ADN Municípios: https://adn.producaorestrita.nfse.gov.br/municipios/docs/index.html (sandbox)
-// ADN Municípios: https://adn.nfse.gov.br/municipios/docs/index.html (produção)
-// Endpoint distribuição: GET /DFe/{UltimoNSU} — base = host + /municipios (sem /docs)
+// URLs conforme documentaÃ§Ã£o oficial (requisitos-nfse-rtc-v2.md, Fontes/manual-municipios-apis-adn)
+// ADN MunicÃ­pios: https://adn.producaorestrita.nfse.gov.br/municipios/docs/index.html (sandbox)
+// ADN MunicÃ­pios: https://adn.nfse.gov.br/municipios/docs/index.html (produÃ§Ã£o)
+// Endpoint distribuiÃ§Ã£o: GET /DFe/{UltimoNSU} â€” base = host + /municipios (sem /docs)
 const AMBIENTES = {
   sandbox: {
     sefin: 'https://sefin.producaorestrita.nfse.gov.br/SefinNacional',
@@ -952,30 +956,40 @@ const AMBIENTES = {
   },
 };
 
+/** Retorna as URLs efetivas de cada API, priorizando valores salvos na config. */
+function resolveUrls(config, env) {
+  const amb = AMBIENTES[env] || AMBIENTES.sandbox;
+  return {
+    sefin:  (config.urlSefin  || amb.sefin  || '').trim(),
+    adn:    (config.urlAdn    || amb.adn    || '').trim(),
+    adnMun: (config.urlAdnMun || amb.adnMun || '').trim(),
+  };
+}
+
 const authenticate = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Token não fornecido' });
+  if (!token) return res.status(401).json({ error: 'Token nÃ£o fornecido' });
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     next();
   } catch(e) {
-    res.status(401).json({ error: 'Token inválido' });
+    res.status(401).json({ error: 'Token invÃ¡lido' });
   }
 };
 
 // ==========================================
-// ROTAS: Autenticação
+// ROTAS: AutenticaÃ§Ã£o
 // ==========================================
 
 app.post('/api/auth/login', rateLimit(60000, 10), async (req, res) => {
   const { cpf, password } = req.body;
-  if (!cpf || !password) return res.status(400).json({ error: 'CPF e senha são obrigatórios' });
+  if (!cpf || !password) return res.status(400).json({ error: 'CPF e senha sÃ£o obrigatÃ³rios' });
 
   const user = await db.getUserByCpf(cpf);
 
   if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
-    return res.status(401).json({ error: 'Credenciais inválidas' });
+    return res.status(401).json({ error: 'Credenciais invÃ¡lidas' });
   }
 
   const token = jwt.sign(
@@ -1000,11 +1014,11 @@ app.post('/api/auth/login', rateLimit(60000, 10), async (req, res) => {
 app.post('/api/auth/login-cert', rateLimit(60000, 10), async (req, res) => {
   const { certificateB64, subject, cnpj, passphrase } = req.body;
   if (!certificateB64 || !subject) {
-    return res.status(400).json({ error: 'Dados do certificado são obrigatórios' });
+    return res.status(400).json({ error: 'Dados do certificado sÃ£o obrigatÃ³rios' });
   }
   const cleanCnpj = (cnpj || '').replace(/\D/g, '');
   if (!cleanCnpj || cleanCnpj.length !== 14) {
-    return res.status(400).json({ error: 'CNPJ válido não encontrado no certificado' });
+    return res.status(400).json({ error: 'CNPJ vÃ¡lido nÃ£o encontrado no certificado' });
   }
 
   const users = await db.getUsers({ userType: 'contribuinte' });
@@ -1014,7 +1028,7 @@ app.post('/api/auth/login-cert', rateLimit(60000, 10), async (req, res) => {
   );
 
   if (!user) {
-    return res.status(401).json({ error: `Nenhum usuário com nível Certificado Digital vinculado ao CNPJ ${cleanCnpj}` });
+    return res.status(401).json({ error: `Nenhum usuÃ¡rio com nÃ­vel Certificado Digital vinculado ao CNPJ ${cleanCnpj}` });
   }
 
   const token = jwt.sign(
@@ -1030,7 +1044,7 @@ app.post('/api/auth/login-cert', rateLimit(60000, 10), async (req, res) => {
     contribuinteCertCache.set(token, { keyPem, certPem });
     setTimeout(() => contribuinteCertCache.delete(token), 8 * 60 * 60 * 1000);
   } catch (certErr) {
-    console.warn('[ Auth ] Certificado não convertido para mTLS:', certErr.message);
+    console.warn('[ Auth ] Certificado nÃ£o convertido para mTLS:', certErr.message);
   }
 
   res.json({
@@ -1059,11 +1073,11 @@ app.use('/api/proxy', async (req, res) => {
   const config = await db.getConfig();
   const env = config.ambiente || 'sandbox';
 
-  if (!api || !AMBIENTES[env] || !AMBIENTES[env][api]) {
-    return res.status(400).json({ error: 'Ambiente ou API inválidos' });
+  const urls = resolveUrls(config, env);
+  const baseUrl = urls[api];
+  if (!api || !baseUrl) {
+    return res.status(400).json({ error: 'Ambiente ou API invÃ¡lidos' });
   }
-
-  const baseUrl = AMBIENTES[env][api];
   const targetUrl = restOfPath ? `${baseUrl}/${restOfPath}` : baseUrl;
 
   let agent = loadCertAgent();
@@ -1094,7 +1108,7 @@ app.use('/api/proxy', async (req, res) => {
     res.status(response.status).send(response.data);
   } catch (error) {
     if (error.code === 'ECONNABORTED') {
-      return res.status(504).json({ error: 'Sistema externo (Sefin/ADN) não respondeu no prazo. Tente novamente.' });
+      return res.status(504).json({ error: 'Sistema externo (Sefin/ADN) nÃ£o respondeu no prazo. Tente novamente.' });
     }
     const status = error.response?.status || 500;
     const data = error.response?.data || { error: error.message };
@@ -1103,17 +1117,37 @@ app.use('/api/proxy', async (req, res) => {
 });
 
 // ==========================================
-// ROTAS: Config (ambiente — fonte única)
+// ROTAS: Config (ambiente â€” fonte Ãºnica)
 // ==========================================
+
+// InformaÃ§Ãµes pÃºblicas do municÃ­pio (cabeÃ§alho do DANFSe, sem auth)
+app.get('/api/municipio/info', async (req, res) => {
+  const config = await db.getConfig();
+  const uf = (config.uf || '').toUpperCase().trim();
+  const addUF = (s) => {
+    if (!s) return '';
+    const txt = s.trim();
+    return (uf && !txt.toUpperCase().endsWith(uf) && !txt.toUpperCase().includes(` - ${uf}`))
+      ? `${txt} - ${uf}`
+      : txt;
+  };
+  res.json({
+    nome:       addUF(config.nome       || ''),
+    prefeitura: addUF(config.prefeitura || ''),
+    fone:       config.telefone || '',
+    email:      config.email    || '',
+    brasao:     config.brasao   || '',
+  });
+});
 
 app.get('/api/config/ambiente', async (req, res) => {
   const config = await db.getConfig();
   const env = config.ambiente || 'sandbox';
-  const { sefin, adn } = AMBIENTES[env];
+  const urls = resolveUrls(config, env);
   res.json({
     ambiente: env,
-    urlSefin: new URL(sefin).hostname,
-    urlAdn: new URL(adn).hostname,
+    urlSefin: urls.sefin,
+    urlAdn:   urls.adn,
   });
 });
 
@@ -1171,14 +1205,15 @@ app.get('/api/health', async (req, res) => {
 
   const config = await db.getConfig();
   const env = config.ambiente || 'sandbox';
+  const _urls = resolveUrls(config, env);
   let [sefin, adn] = await Promise.all([
-    checkEndpoint(AMBIENTES[env].sefin),
-    checkEndpoint(AMBIENTES[env].adn)
+    checkEndpoint(_urls.sefin),
+    checkEndpoint(_urls.adn)
   ]);
 
   if (env === 'sandbox' && sefin.status === 'offline' && adn.status === 'offline') {
-    sefin = { status: 'online', latency: '—', _fallback: true };
-    adn = { status: 'online', latency: '—', _fallback: true };
+    sefin = { status: 'online', latency: 'â€”', _fallback: true };
+    adn = { status: 'online', latency: 'â€”', _fallback: true };
   }
 
   let dbStatus = 'offline';
@@ -1195,7 +1230,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // ==========================================
-// ROTAS: Gestão de Usuários (CRUD)
+// ROTAS: GestÃ£o de UsuÃ¡rios (CRUD)
 // ==========================================
 
 app.get('/api/users', authenticate, async (req, res) => {
@@ -1219,18 +1254,18 @@ app.post('/api/users', authenticate, rateLimit(60000, 20), async (req, res) => {
   const { cpf, name, email, celular, role, password, authLevel, cnpjVinculado, userType } = req.body;
 
   if (!cpf || !name || !role) {
-    return res.status(400).json({ error: 'Campos obrigatórios: cpf, name, role' });
+    return res.status(400).json({ error: 'Campos obrigatÃ³rios: cpf, name, role' });
   }
   if (!email || !email.trim()) {
-    return res.status(400).json({ error: 'E-mail é obrigatório' });
+    return res.status(400).json({ error: 'E-mail Ã© obrigatÃ³rio' });
   }
   if (!celular || !celular.trim()) {
-    return res.status(400).json({ error: 'Celular é obrigatório' });
+    return res.status(400).json({ error: 'Celular Ã© obrigatÃ³rio' });
   }
 
   const existing = await db.getUserByCpf(cpf);
   if (existing) {
-    return res.status(409).json({ error: 'Usuário com este CPF já existe' });
+    return res.status(409).json({ error: 'UsuÃ¡rio com este CPF jÃ¡ existe' });
   }
 
   await db.insertUser({
@@ -1250,7 +1285,7 @@ app.post('/api/users', authenticate, rateLimit(60000, 20), async (req, res) => {
 
 app.put('/api/users/:cpf', authenticate, async (req, res) => {
   const existing = await db.getUserByCpf(req.params.cpf);
-  if (!existing) return res.status(404).json({ error: 'Usuário não encontrado' });
+  if (!existing) return res.status(404).json({ error: 'UsuÃ¡rio nÃ£o encontrado' });
 
   const { name, email, celular, role, authLevel, status } = req.body;
   const updates = {};
@@ -1267,13 +1302,13 @@ app.put('/api/users/:cpf', authenticate, async (req, res) => {
 
 app.delete('/api/users/:cpf', authenticate, async (req, res) => {
   const existing = await db.getUserByCpf(req.params.cpf);
-  if (!existing) return res.status(404).json({ error: 'Usuário não encontrado' });
+  if (!existing) return res.status(404).json({ error: 'UsuÃ¡rio nÃ£o encontrado' });
   await db.deleteUser(req.params.cpf);
   res.json({ sucesso: true });
 });
 
 // ==========================================
-// ROTAS: Município — Notas Importadas
+// ROTAS: MunicÃ­pio â€” Notas Importadas
 // ==========================================
 
 app.get('/api/municipio/notas', authenticate, async (req, res) => {
@@ -1282,8 +1317,20 @@ app.get('/api/municipio/notas', authenticate, async (req, res) => {
 });
 
 // ==========================================
-// ROTAS: Município — Apurações e Guias
+// ROTAS: MunicÃ­pio â€” ApuraÃ§Ãµes e Guias
 // ==========================================
+
+// CompetÃªncias com notas ou apuraÃ§Ãµes registradas na base
+app.get('/api/municipio/competencias', authenticate, async (req, res) => {
+  const competencias = await db.getCompetenciasDisponiveis();
+  res.json({ sucesso: true, competencias });
+});
+
+// ApuraÃ§Ãµes de uma competÃªncia especÃ­fica
+app.get('/api/municipio/apuracoes-competencia/:competencia', authenticate, async (req, res) => {
+  const apuracoes = await db.getApuracoesByCompetencia(req.params.competencia);
+  res.json({ sucesso: true, apuracoes });
+});
 
 app.get('/api/municipio/apuracoes/:cnpj', authenticate, async (req, res) => {
   const apuracoes = await db.getApuracoesByCnpj(req.params.cnpj);
@@ -1292,9 +1339,9 @@ app.get('/api/municipio/apuracoes/:cnpj', authenticate, async (req, res) => {
 
 app.post('/api/municipio/gerar-guia/:id', authenticate, async (req, res) => {
   const apu = await db.getApuracaoById(req.params.id);
-  if (!apu) return res.status(404).json({ error: 'Apuração não encontrada' });
+  if (!apu) return res.status(404).json({ error: 'ApuraÃ§Ã£o nÃ£o encontrada' });
 
-  const valorTotal = (apu.totalIssProprio || 0) + (apu.totalIssTerceiros || 0);
+  const valorTotal = parseFloat(apu.totalIssProprio || 0) + parseFloat(apu.totalIssTerceiros || 0);
   const vencimento = new Date();
   vencimento.setDate(vencimento.getDate() + 15);
 
@@ -1313,14 +1360,14 @@ app.post('/api/municipio/gerar-guia/:id', authenticate, async (req, res) => {
 
 app.post('/api/municipio/pagar-guia/:id', authenticate, async (req, res) => {
   const apu = await db.getApuracaoById(req.params.id);
-  if (!apu) return res.status(404).json({ error: 'Apuração não encontrada' });
+  if (!apu) return res.status(404).json({ error: 'ApuraÃ§Ã£o nÃ£o encontrada' });
 
   await db.updateApuracao(req.params.id, { status: 'Paga', dataPagamento: new Date().toISOString() });
   res.json({ sucesso: true });
 });
 
 // ==========================================
-// ROTAS: Contribuinte — Sync ADN, Decisão Judicial
+// ROTAS: Contribuinte â€” Sync ADN, DecisÃ£o Judicial
 // ==========================================
 
 app.post('/api/contribuinte/sync-adn', authenticate, async (req, res) => {
@@ -1331,13 +1378,13 @@ app.post('/api/contribuinte/sync-adn', authenticate, async (req, res) => {
   const cnpj = String(user.cnpj).replace(/\D/g, '');
   const token = req.headers.authorization?.split(' ')[1];
   if (!token || !contribuinteCertCache.has(token)) {
-    return res.status(400).json({ error: 'Faça login com certificado digital para sincronizar com o ADN.' });
+    return res.status(400).json({ error: 'FaÃ§a login com certificado digital para sincronizar com o ADN.' });
   }
   const { keyPem, certPem } = contribuinteCertCache.get(token);
   const agent = new https.Agent({ key: keyPem, cert: certPem, rejectUnauthorized: false });
   const config = await db.getConfig();
   const env = config.ambiente || 'sandbox';
-  const baseAdn = AMBIENTES[env].adn;
+  const baseAdn = resolveUrls(config, env).adn;
   const ultNsu = await db.getContribuinteMaxNsu(cnpj);
 
   try {
@@ -1376,7 +1423,7 @@ app.post('/api/contribuinte/sync-adn', authenticate, async (req, res) => {
 
 app.get('/api/municipio/decisao-judicial', authenticate, async (req, res) => {
   if (req.user.userType !== 'municipio') {
-    return res.status(403).json({ error: 'Acesso restrito ao município.' });
+    return res.status(403).json({ error: 'Acesso restrito ao municÃ­pio.' });
   }
   const decisoes = await db.getAllDecisoesJudiciais();
   res.json({ sucesso: true, decisoes });
@@ -1384,11 +1431,11 @@ app.get('/api/municipio/decisao-judicial', authenticate, async (req, res) => {
 
 app.post('/api/municipio/decisao-judicial', authenticate, async (req, res) => {
   if (req.user.userType !== 'municipio') {
-    return res.status(403).json({ error: 'Apenas usuários do município podem cadastrar decisões.' });
+    return res.status(403).json({ error: 'Apenas usuÃ¡rios do municÃ­pio podem cadastrar decisÃµes.' });
   }
   const { cnpjContribuinte, numeroProcesso, tipo } = req.body;
   if (!cnpjContribuinte || !numeroProcesso) {
-    return res.status(400).json({ error: 'CNPJ do contribuinte e número do processo são obrigatórios.' });
+    return res.status(400).json({ error: 'CNPJ do contribuinte e nÃºmero do processo sÃ£o obrigatÃ³rios.' });
   }
   await db.insertDecisaoJudicial({ cnpj: cnpjContribuinte, numeroProcesso, tipo });
   res.json({ sucesso: true });
@@ -1396,7 +1443,7 @@ app.post('/api/municipio/decisao-judicial', authenticate, async (req, res) => {
 
 app.delete('/api/municipio/decisao-judicial/:id', authenticate, async (req, res) => {
   if (req.user.userType !== 'municipio') {
-    return res.status(403).json({ error: 'Acesso restrito ao município.' });
+    return res.status(403).json({ error: 'Acesso restrito ao municÃ­pio.' });
   }
   const { id } = req.params;
   await db.deleteDecisaoJudicial(id);
@@ -1404,7 +1451,7 @@ app.delete('/api/municipio/decisao-judicial/:id', authenticate, async (req, res)
 });
 
 // ==========================================
-// ROTAS: Contribuinte — Minhas Notas
+// ROTAS: Contribuinte â€” Minhas Notas
 // ==========================================
 
 app.get('/api/notes', authenticate, async (req, res) => {
@@ -1425,11 +1472,11 @@ app.get('/api/notes', authenticate, async (req, res) => {
   res.json(notas);
 });
 
-// Consulta NFS-e por chave (banco local — evita 403 da Sefin sem certificado)
-// Requer login; contribuinte só vê notas onde é prestador ou tomador
+// Consulta NFS-e por chave (banco local â€” evita 403 da Sefin sem certificado)
+// Requer login; contribuinte sÃ³ vÃª notas onde Ã© prestador ou tomador
 app.get('/api/nfse/:chave', authenticate, async (req, res) => {
   const nota = await db.getNotaByChave(req.params.chave);
-  if (!nota) return res.status(404).json({ error: 'NFS-e não encontrada no banco local' });
+  if (!nota) return res.status(404).json({ error: 'NFS-e nÃ£o encontrada no banco local' });
 
   const user = req.user;
   if (user.userType === 'contribuinte' && user.cnpj) {
@@ -1438,8 +1485,8 @@ app.get('/api/nfse/:chave', authenticate, async (req, res) => {
     const tomCnpj = String(nota.tomador?.CNPJ || nota.tomador?.cnpj || '').replace(/\D/g, '');
     if (cnpjUser && prestCnpj !== cnpjUser && tomCnpj !== cnpjUser) {
       return res.status(403).json({
-        error: 'Você não tem permissão para consultar esta NFS-e. A nota deve ser do prestador ou tomador vinculado ao seu usuário.',
-        hint: 'Verifique se está logado com o CNPJ correto ou use certificado digital para consulta direta na Sefin.'
+        error: 'VocÃª nÃ£o tem permissÃ£o para consultar esta NFS-e. A nota deve ser do prestador ou tomador vinculado ao seu usuÃ¡rio.',
+        hint: 'Verifique se estÃ¡ logado com o CNPJ correto ou use certificado digital para consulta direta na Sefin.'
       });
     }
   }
@@ -1457,10 +1504,10 @@ app.get('/api/nfse/:chave', authenticate, async (req, res) => {
   const endPrest = prest.endereco || prest.end || {};
   const endTom   = tom.endereco   || tom.end   || {};
 
-  // Monta endereço como string para o campo Endereço do DANFSe
+  // Monta endereÃ§o como string para o campo EndereÃ§o do DANFSe
   const fmtEnd = (e, p) => [
     p.xLgr || e.xLgr, p.nro || e.nro,
-    p.xCpl || e.xCpl || 'Não Informado',
+    p.xCpl || e.xCpl || 'NÃ£o Informado',
     p.xBairro || e.xBairro,
   ].filter(Boolean).join(', ');
   const fmtMun = (e, p) => {
@@ -1491,7 +1538,7 @@ app.get('/api/nfse/:chave', authenticate, async (req, res) => {
   const config = await db.getConfig().catch(() => ({}));
 
   const infNFSe = {
-    // ── Identificação ──────────────────────────────────────────
+    // â”€â”€ IdentificaÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     nNFSe:   dg.nNFSe   || '',
     dhNFSe:  dg.dhProc  || dg.dhEmi || '',
     nDPS:    dg.nDPS    || '',
@@ -1499,13 +1546,26 @@ app.get('/api/nfse/:chave', authenticate, async (req, res) => {
     dCompet: dg.dCompet || nota.competencia || '',
     dhDPS:   dg.dhEmi   || '',
     ambGer:  dg.ambGer  || '2',
-    // ── Município emissor ───────────────────────────────────────
-    _munNome:      config.nome       || dg.xLocEmi || '',
-    _munPrefeitura:config.prefeitura || '',
-    _munFone:      config.telefone   || '',
-    _munEmail:     config.email      || '',
-    _munBrasao:    config.brasao     || '',
-    // ── Prestador ──────────────────────────────────────────────
+    // â”€â”€ MunicÃ­pio emissor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Concatena UF ao final se ainda nÃ£o estiver presente no texto
+    ...((() => {
+      const uf   = (config.uf || '').toUpperCase().trim();
+      const addUF = (s) => {
+        if (!s) return '';
+        const txt = s.trim();
+        return (uf && !txt.toUpperCase().endsWith(uf) && !txt.toUpperCase().includes(` - ${uf}`))
+          ? `${txt} - ${uf}`
+          : txt;
+      };
+      return {
+        _munNome:      addUF(config.nome       || dg.xLocEmi || ''),
+        _munPrefeitura:addUF(config.prefeitura || ''),
+        _munFone:      config.telefone || '',
+        _munEmail:     config.email    || '',
+        _munBrasao:    config.brasao   || '',
+      };
+    })()),
+    // â”€â”€ Prestador â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     emit: {
       CNPJ:  prest.CNPJ || prest.cnpj || '',
       CPF:   prest.CPF  || prest.cpf  || '',
@@ -1517,19 +1577,19 @@ app.get('/api/nfse/:chave', authenticate, async (req, res) => {
       endereco: {
         xLgr:    endPrest.xLgr    || prest.xLgr    || '',
         nro:     endPrest.nro     || prest.nro      || '',
-        xCpl:    endPrest.xCpl    || prest.xCpl     || 'Não Informado',
+        xCpl:    endPrest.xCpl    || prest.xCpl     || 'NÃ£o Informado',
         xBairro: endPrest.xBairro || prest.xBairro  || '',
         cMun:    endPrest.cMun    || prest.cMun      || '',
         xMun:    endPrest.xMun    || prest.xMun      || '',
         UF:      endPrest.UF      || endPrest.uf     || prest.UF || prest.uf || '',
         CEP:     endPrest.CEP     || endPrest.cep    || prest.CEP || prest.cep || '',
       },
-      // Regime tributário
+      // Regime tributÃ¡rio
       opSimpNac:  prest.opSimpNac  || dg.opSimpNac  || '',
       regApurSN:  prest.regApurSN  || dg.regApurSN  || '',
       regEspTrib: prest.regEspTrib || ti.regEspTrib  || '0',
     },
-    // ── Tomador ────────────────────────────────────────────────
+    // â”€â”€ Tomador â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     toma: {
       CNPJ:  tom.CNPJ || tom.cnpj || '',
       CPF:   tom.CPF  || tom.cpf  || '',
@@ -1549,7 +1609,7 @@ app.get('/api/nfse/:chave', authenticate, async (req, res) => {
         CEP:     endTom.CEP     || endTom.cep    || tom.CEP || tom.cep || '',
       },
     },
-    // ── Serviço ────────────────────────────────────────────────
+    // â”€â”€ ServiÃ§o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     serv: {
       cTribNac:      serv.cServ?.cTribNac  || serv.cTribNac  || '',
       cTribMun:      serv.cServ?.cTribMun  || serv.cTribMun  || '',
@@ -1559,7 +1619,7 @@ app.get('/api/nfse/:chave', authenticate, async (req, res) => {
       xLocPrestacao: serv.xLocPrestacao   || '',
       cPaisPrestacao:serv.cPaisPrestacao  || '',
     },
-    // ── Tributação Municipal (ISSQN) ────────────────────────────
+    // â”€â”€ TributaÃ§Ã£o Municipal (ISSQN) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     tributos: {
       issqn: {
         tribISSQN:   ti.tribISSQN  || '1',
@@ -1594,7 +1654,7 @@ app.get('/api/nfse/:chave', authenticate, async (req, res) => {
       },
       ibscbs: trib.ibscbs || {},
     },
-    // ── Valores ────────────────────────────────────────────────
+    // â”€â”€ Valores â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     valores: {
       vServ:       vServ,
       vDescCond:   val.vDescCond  ?? 0,
@@ -1613,7 +1673,7 @@ app.get('/api/nfse/:chave', authenticate, async (req, res) => {
     // Info complementar
     xInfComp: dg.xInfComp || '',
     nbs:      serv.cServ?.cNBS || serv.cNBS || '',
-    // Mantém compatibilidade com código anterior
+    // MantÃ©m compatibilidade com cÃ³digo anterior
     dadosGerais: dg,
     prestador:   prest,
     tomador:     tom,
@@ -1623,7 +1683,7 @@ app.get('/api/nfse/:chave', authenticate, async (req, res) => {
 });
 
 // ==========================================
-// ROTAS: Configurações do Município
+// ROTAS: ConfiguraÃ§Ãµes do MunicÃ­pio
 // ==========================================
 
 app.get('/api/municipio/config', authenticate, async (req, res) => {
@@ -1631,10 +1691,107 @@ app.get('/api/municipio/config', authenticate, async (req, res) => {
   res.json(config || {});
 });
 
+// â”€â”€ GET /api/municipios-tom?uf=XX&q=texto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Busca municÃ­pios por UF e/ou nome para sugestÃ£o no frontend
+app.get('/api/municipios-tom', authenticate, async (req, res) => {
+  try {
+    const { uf, q, cod_tom, cod_ibge } = req.query;
+    if (cod_tom) {
+      const { rows } = await db.pool.query(
+        'SELECT uf, cod_tom, cod_ibge, nome_empresarial, ente FROM municipios_tom WHERE cod_tom = $1 LIMIT 5',
+        [String(cod_tom).padStart(4, '0')]
+      );
+      return res.json({ municipios: rows });
+    }
+    if (cod_ibge) {
+      const { rows } = await db.pool.query(
+        'SELECT uf, cod_tom, cod_ibge, nome_empresarial, ente FROM municipios_tom WHERE cod_ibge = $1 LIMIT 3',
+        [String(cod_ibge)]
+      );
+      return res.json({ municipios: rows });
+    }
+    const params = [];
+    let sql = 'SELECT uf, cod_tom, cod_ibge, nome_empresarial, ente FROM municipios_tom WHERE 1=1';
+    if (uf) { params.push(uf.toUpperCase()); sql += ` AND uf = $${params.length}`; }
+    if (q)  {
+      params.push(`%${q.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')}%`);
+      sql += ` AND (UPPER(unaccent(ente)) LIKE $${params.length} OR UPPER(unaccent(nome_empresarial)) LIKE $${params.length})`;
+    }
+    sql += ' ORDER BY ente LIMIT 20';
+    const { rows } = await db.pool.query(sql, params);
+    res.json({ municipios: rows });
+  } catch (err) {
+    // Fallback sem unaccent (extensÃ£o pode nÃ£o estar instalada)
+    try {
+      const { uf, q, cod_ibge } = req.query;
+      const params = [];
+      if (cod_ibge) {
+        const { rows } = await db.pool.query(
+          'SELECT uf, cod_tom, cod_ibge, nome_empresarial, ente FROM municipios_tom WHERE cod_ibge = $1 LIMIT 3',
+          [String(cod_ibge)]
+        );
+        return res.json({ municipios: rows });
+      }
+      let sql = 'SELECT uf, cod_tom, cod_ibge, nome_empresarial, ente FROM municipios_tom WHERE 1=1';
+      if (uf) { params.push(uf.toUpperCase()); sql += ` AND uf = $${params.length}`; }
+      if (q)  { params.push(`%${q.toUpperCase()}%`); sql += ` AND (UPPER(ente) LIKE $${params.length} OR UPPER(nome_empresarial) LIKE $${params.length})`; }
+      sql += ' ORDER BY ente LIMIT 20';
+      const { rows } = await db.pool.query(sql, params);
+      res.json({ municipios: rows });
+    } catch (err2) {
+      res.status(500).json({ erro: err2.message });
+    }
+  }
+});
+
+// â”€â”€ GET /api/estados-tom â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.get('/api/estados-tom', authenticate, async (req, res) => {
+  try {
+    const { rows } = await db.pool.query('SELECT uf, cod_tom, nome FROM estados_tom ORDER BY uf');
+    res.json({ estados: rows });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ POST /api/municipio/config/resolve-tom â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Auto-resolve cod_tom a partir do nome + uf salvos em config
+app.post('/api/municipio/config/resolve-tom', authenticate, async (req, res) => {
+  try {
+    const config = await db.getConfig();
+    if (config.cod_tom) return res.json({ sucesso: true, cod_tom: config.cod_tom, fonte: 'config' });
+
+    const uf   = (req.body.uf   || config.uf   || '').toUpperCase();
+    const nome = (req.body.nome || config.nome  || '').toUpperCase();
+    if (!uf || !nome) return res.status(400).json({ erro: 'UF e nome sÃ£o obrigatÃ³rios.' });
+
+    // Tenta busca exata, depois aproximada
+    let rows;
+    try {
+      ({ rows } = await db.pool.query(
+        `SELECT uf, cod_tom, nome_empresarial, ente,
+                similarity(UPPER(unaccent(ente)), UPPER(unaccent($2))) AS sim
+         FROM municipios_tom
+         WHERE uf = $1
+         ORDER BY sim DESC LIMIT 5`,
+        [uf, nome]
+      ));
+    } catch {
+      ({ rows } = await db.pool.query(
+        'SELECT uf, cod_tom, nome_empresarial, ente FROM municipios_tom WHERE uf = $1 ORDER BY ente LIMIT 20',
+        [uf]
+      ));
+    }
+    res.json({ sucesso: true, candidatos: rows, fonte: 'busca' });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
 app.put('/api/municipio/config', authenticate, async (req, res) => {
   const allowed = [
-    'ibge', 'nome', 'uf', 'cnpj', 'inscEstadual', 'endereco', 'email', 'telefone', 'ambiente',
-    'urlAdnMun',
+    'ibge', 'nome', 'prefeitura', 'brasao', 'uf', 'cnpj', 'inscEstadual', 'endereco', 'email', 'telefone', 'ambiente',
+    'urlSefin', 'urlAdn', 'urlAdnMun', 'cod_tom',
     'certSubject', 'certSerialNumber', 'certNotBefore', 'certNotAfter',
     'certLoadedAt', 'certFileName', 'certKeyAlgorithm', 'certIssuer'
   ];
@@ -1670,7 +1827,7 @@ function convertPfxToPem(pfxBuffer, passphrase) {
   const certList = certBags[forge.pki.oids.certBag] || [];
 
   if (keyList.length === 0 || certList.length === 0) {
-    throw new Error('Chave privada ou certificado não encontrados no PFX.');
+    throw new Error('Chave privada ou certificado nÃ£o encontrados no PFX.');
   }
 
   const keyPem = forge.pki.privateKeyToPem(keyList[0].key);
@@ -1696,20 +1853,20 @@ function convertPfxToPem(pfxBuffer, passphrase) {
           const { keyPem, certPem } = convertPfxToPem(pfxBuf, _munCertPassphrase);
           fsSync.writeFileSync(MUN_KEY_PEM_PATH, keyPem);
           fsSync.writeFileSync(MUN_CERT_PEM_PATH, certPem);
-          console.log('[ Cert ] PFX convertido para PEM com sucesso na inicialização.');
+          console.log('[ Cert ] PFX convertido para PEM com sucesso na inicializaÃ§Ã£o.');
         } catch (convErr) {
-          console.warn('[ Cert ] Falha ao converter PFX → PEM na inicialização:', convErr.message);
+          console.warn('[ Cert ] Falha ao converter PFX â†’ PEM na inicializaÃ§Ã£o:', convErr.message);
         }
       }
     }
-  } catch (_) { /* db ainda não existe na primeira inicialização */ }
+  } catch (_) { /* db ainda nÃ£o existe na primeira inicializaÃ§Ã£o */ }
 })();
 
 app.post('/api/municipio/upload-cert', authenticate, express.raw({ type: 'application/octet-stream', limit: '5mb' }), async (req, res) => {
   try {
     const passphrase = req.headers['x-cert-passphrase'] || '';
     if (!req.body || req.body.length === 0) {
-      return res.status(400).json({ error: 'Arquivo do certificado não recebido.' });
+      return res.status(400).json({ error: 'Arquivo do certificado nÃ£o recebido.' });
     }
     await ensureDataDir();
 
@@ -1723,10 +1880,10 @@ app.post('/api/municipio/upload-cert', authenticate, express.raw({ type: 'applic
 
     await db.updateConfig({ certPassphrase: Buffer.from(passphrase).toString('base64') });
 
-    console.log(`[ Cert ] Certificado convertido PFX→PEM e salvo (${req.body.length} bytes).`);
+    console.log(`[ Cert ] Certificado convertido PFXâ†’PEM e salvo (${req.body.length} bytes).`);
     res.json({ sucesso: true });
   } catch (err) {
-    console.error('[ Cert ] Falha no upload/conversão:', err.message);
+    console.error('[ Cert ] Falha no upload/conversÃ£o:', err.message);
     res.status(500).json({ error: `Falha ao processar certificado: ${err.message}` });
   }
 });
@@ -1755,16 +1912,16 @@ function loadMunCertAgent() {
       console.log('[ Cert ] PFX convertido para PEM on-the-fly.');
       return new https.Agent({ key: keyPem, cert: certPem, rejectUnauthorized: false });
     } catch (err) {
-      console.warn('[ Cert ] Falha ao converter PFX → PEM:', err.message);
+      console.warn('[ Cert ] Falha ao converter PFX â†’ PEM:', err.message);
     }
   }
 
-  console.warn('[ Cert ] Certificado municipal não encontrado.');
+  console.warn('[ Cert ] Certificado municipal nÃ£o encontrado.');
   return loadCertAgent();
 }
 
 // ==========================================
-// ROTAS: Admin — Ações Forçadas
+// ROTAS: Admin â€” AÃ§Ãµes ForÃ§adas
 // ==========================================
 
 app.post('/api/admin/force-sync', authenticate, async (req, res) => {
@@ -1772,12 +1929,12 @@ app.post('/api/admin/force-sync', authenticate, async (req, res) => {
     const result = await syncNfsFromAdn();
     res.json({ sucesso: true, ...result });
   } catch (err) {
-    console.error('[ force-sync ] Erro não tratado:', err.message);
+    console.error('[ force-sync ] Erro nÃ£o tratado:', err.message);
     res.status(500).json({ sucesso: false, fonte: 'erro', erro: err.message });
   }
 });
 
-// Diagnóstico ADN — testa cada URL e retorna status detalhado (usa certificado armazenado)
+// DiagnÃ³stico ADN â€” testa cada URL e retorna status detalhado (usa certificado armazenado)
 app.get('/api/admin/probe-adn', authenticate, async (req, res) => {
   try {
     const config = await db.getConfig();
@@ -1787,13 +1944,13 @@ app.get('/api/admin/probe-adn', authenticate, async (req, res) => {
     const certOk = fsSync.existsSync(MUN_KEY_PEM_PATH) && fsSync.existsSync(MUN_CERT_PEM_PATH);
 
     if (!adnBaseUrl) {
-      return res.json({ erro: 'URL ADN não configurada.', certOk });
+      return res.json({ erro: 'URL ADN nÃ£o configurada.', certOk });
     }
 
     const baseMun = adnBaseUrl.replace(/\/$/, '');
     const baseRoot = baseMun.replace(/\/(municipios|contribuintes|dfe|DFe)\/?$/, '') || baseMun;
 
-    // Tenta várias URLs e coleta resultado completo de cada uma
+    // Tenta vÃ¡rias URLs e coleta resultado completo de cada uma
     const probeTargets = [
       { label: 'Swagger/OpenAPI spec', url: `${baseMun}/v3/api-docs` },
       { label: 'Swagger UI HTML', url: `${baseMun}/docs/index.html` },
@@ -1815,7 +1972,7 @@ app.get('/api/admin/probe-adn', authenticate, async (req, res) => {
           httpsAgent: agent,
           headers: { Accept: 'application/json, text/html, */*', 'User-Agent': 'Freire-NFSe/1.0 Probe' },
           timeout: 10000,
-          validateStatus: () => true,  // não jogar erro em qualquer status HTTP
+          validateStatus: () => true,  // nÃ£o jogar erro em qualquer status HTTP
         });
         const bodySnippet = typeof r.data === 'string'
           ? r.data.substring(0, 300)
@@ -1838,7 +1995,7 @@ app.get('/api/admin/probe-adn', authenticate, async (req, res) => {
   }
 });
 
-// Simulação ADN — importa notas sintéticas para teste quando ADN real não está disponível
+// SimulaÃ§Ã£o ADN â€” importa notas sintÃ©ticas para teste quando ADN real nÃ£o estÃ¡ disponÃ­vel
 app.post('/api/admin/simular-importacao', authenticate, async (req, res) => {
   try {
     const config = await db.getConfig();
@@ -1849,7 +2006,7 @@ app.post('/api/admin/simular-importacao', authenticate, async (req, res) => {
 
     const servicos = ['01.01.01', '01.02.01', '01.04.01', '02.01.01', '07.01.01', '14.01.00', '17.06.00'];
     const cnpjs = ['11222333000181', '22333444000195', '33444555000107', '44555666000140', '55666777000160'];
-    const nomes = ['Consultoria XYZ Ltda', 'Tech Solutions SA', 'Serviços Prestados ME', 'Empresa Demo Ltda', 'Consultores Associados'];
+    const nomes = ['Consultoria XYZ Ltda', 'Tech Solutions SA', 'ServiÃ§os Prestados ME', 'Empresa Demo Ltda', 'Consultores Associados'];
 
     let salvos = 0;
     const notasGeradas = [];
@@ -1867,7 +2024,7 @@ app.post('/api/admin/simular-importacao', authenticate, async (req, res) => {
 
       if (existingChaves.has(chaveAcesso) || existingNsus.has(nsu)) continue;
 
-      // Formato compatível com insertNota (campos aninhados como o parseNfseFromAdn gera)
+      // Formato compatÃ­vel com insertNota (campos aninhados como o parseNfseFromAdn gera)
       const nota = {
         nsu,
         chaveAcesso,
@@ -1899,7 +2056,7 @@ app.post('/api/admin/simular-importacao', authenticate, async (req, res) => {
         },
         servico: {
           cServ: servicos[servIdx],
-          xDescServ: `Serviço de simulação — código ${servicos[servIdx]}`,
+          xDescServ: `ServiÃ§o de simulaÃ§Ã£o â€” cÃ³digo ${servicos[servIdx]}`,
         },
       };
 
@@ -1913,10 +2070,10 @@ app.post('/api/admin/simular-importacao', authenticate, async (req, res) => {
     const newMax = currentMaxNsu + qtd;
     await db.updateMaxNsu(newMax);
 
-    console.log(`[ Simulação ] ${salvos} notas sintéticas importadas para teste.`);
+    console.log(`[ SimulaÃ§Ã£o ] ${salvos} notas sintÃ©ticas importadas para teste.`);
     res.json({ sucesso: true, novaNotas: salvos, maxNsu: newMax, notas: notasGeradas });
   } catch (err) {
-    console.error('[ Simulação ] Erro:', err.message);
+    console.error('[ SimulaÃ§Ã£o ] Erro:', err.message);
     res.status(500).json({ erro: err.message });
   }
 });
@@ -1927,7 +2084,7 @@ app.post('/api/admin/force-apuracao', authenticate, async (req, res) => {
   res.json({ sucesso: true, qdtGuias: resultados.length, resultados });
 });
 
-// ─── Contribuinte Regime ───────────────────────────────────────
+// â”€â”€â”€ Contribuinte Regime â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.get('/api/municipio/contribuinte-regime', authenticate, async (req, res) => {
   try {
     const r = await db.pool.query('SELECT * FROM contribuinte_regime ORDER BY atualizado_em DESC');
@@ -1962,13 +2119,12 @@ app.delete('/api/municipio/contribuinte-regime/:cnpj', authenticate, async (req,
   }
 });
 
-// ─── Parâmetros Municipais (proxy para Sefin) ─────────────────
+// â”€â”€â”€ ParÃ¢metros Municipais (proxy para Sefin) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.get('/api/parametros-municipais/:codMun', authenticate, async (req, res) => {
   try {
     const config = await db.getConfig();
     const ambiente = config.ambiente || 'sandbox';
-    const AMBIENTES = { sandbox: { sefin: 'https://sefin.producaorestrita.nfse.gov.br' }, production: { sefin: 'https://sefin.nfse.gov.br' } };
-    const sefinBase = (config.urlSefin || process.env.SEFIN_URL || AMBIENTES[ambiente]?.sefin)?.trim();
+    const sefinBase = resolveUrls(config, ambiente).sefin?.replace(/\/SefinNacional$/, '').trim();
     const agent = loadMunCertAgent();
     const { codMun } = req.params;
 
@@ -1994,9 +2150,847 @@ app.get('/api/parametros-municipais/:codMun', authenticate, async (req, res) => 
 });
 
 // ==========================================
+// PGDAS-D â€” Monitor, ReconciliaÃ§Ã£o, RBT12
+// ==========================================
+
+/** Calcula o regime de apuraÃ§Ã£o (regApurTribSN) conforme RBT12 */
+function calcRegApurTribSN(rbt12, isMEI = false) {
+  if (isMEI) return '3';
+  if (rbt12 > 3_600_000) return '2';   // sublimite â†’ guia municipal
+  return '1';                           // DAS / PGDAS-D
+}
+
+/** Soma v_serv das NFS-e dos Ãºltimos 12 meses para um CNPJ */
+async function calcRbt12(cnpj) {
+  const cnpjClean = cnpj.replace(/\D/g, '');
+  const r = await db.pool.query(
+    `SELECT COALESCE(SUM(v_serv),0) AS rbt12
+     FROM notas
+     WHERE prestador_cnpj = $1
+       AND dh_emi >= NOW() - INTERVAL '12 months'
+       AND status NOT IN ('Cancelada','SubstituÃ­da')`,
+    [cnpjClean]
+  );
+  return Number(r.rows[0]?.rbt12 || 0);
+}
+
+/** Retorna lista de CNPJs contribuintes Ãºnicos das notas importadas */
+async function listarCnpjsAtivos(competencia) {
+  const r = await db.pool.query(
+    `SELECT DISTINCT prestador_cnpj AS cnpj, prestador_nome AS nome
+     FROM notas
+     WHERE competencia = $1 AND status NOT IN ('Cancelada','SubstituÃ­da')
+     ORDER BY prestador_nome`,
+    [competencia]
+  );
+  return r.rows;
+}
+
+// â”€â”€ GET /api/pgdas/monitor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.get('/api/pgdas/monitor', authenticate, async (req, res) => {
+  try {
+    const competencia = req.query.competencia || new Date().toISOString().substring(0,7);
+    const cnpjs = await listarCnpjsAtivos(competencia);
+
+    // Conta status das declaraÃ§Ãµes
+    const rDecl = await db.pool.query(
+      `SELECT status, COUNT(*) AS qtd FROM pgdas_declaracoes
+       WHERE competencia = $1 GROUP BY status`,
+      [competencia]
+    ).catch(() => ({ rows: [] }));
+
+    const contadores = rDecl.rows.reduce((a, r) => { a[r.status] = Number(r.qtd); return a; }, {});
+    const rAdn = await db.pool.query(
+      `SELECT COALESCE(SUM(v_serv),0) AS rb_total, COALESCE(SUM(v_iss),0) AS iss_total
+       FROM notas WHERE competencia = $1 AND status NOT IN ('Cancelada','SubstituÃ­da')`,
+      [competencia]
+    ).catch(() => ({ rows: [{ rb_total: 0 }] }));
+
+    res.json({
+      sucesso: true,
+      competencia,
+      kpis: {
+        total_contribuintes: cnpjs.length,
+        total_pendentes: (cnpjs.length - (contadores.ok || 0) - (contadores.enviado || 0)),
+        total_divergentes: contadores.divergente || 0,
+        rb_adn_total: Number(rAdn.rows[0]?.rb_total || 0),
+        iss_total: Number(rAdn.rows[0]?.iss_total || 0),
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ GET /api/pgdas/declaracoes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.get('/api/pgdas/declaracoes', authenticate, async (req, res) => {
+  try {
+    const competencia = req.query.competencia || new Date().toISOString().substring(0,7);
+    const cnpjs = await listarCnpjsAtivos(competencia);
+
+    // Soma de receita por CNPJ no ADN
+    const rAdn = await db.pool.query(
+      `SELECT prestador_cnpj AS cnpj,
+              COUNT(*) AS total_notas,
+              COALESCE(SUM(v_serv),0) AS rb_adn,
+              COALESCE(SUM(v_iss),0)  AS v_iss
+       FROM notas
+       WHERE competencia = $1 AND status NOT IN ('Cancelada','SubstituÃ­da')
+       GROUP BY prestador_cnpj`,
+      [competencia]
+    );
+    const adnMap = Object.fromEntries(rAdn.rows.map(r => [r.cnpj, r]));
+
+    // DeclaraÃ§Ãµes jÃ¡ registradas
+    const rDecl = await db.pool.query(
+      `SELECT * FROM pgdas_declaracoes WHERE competencia = $1`,
+      [competencia]
+    ).catch(() => ({ rows: [] }));
+    const declMap = Object.fromEntries(rDecl.rows.map(r => [r.cnpj, r]));
+
+    // Regimes
+    const rReg = await db.pool.query('SELECT cnpj, regime FROM contribuinte_regime').catch(() => ({ rows: [] }));
+    const regMap = Object.fromEntries(rReg.rows.map(r => [r.cnpj, r.regime]));
+
+    const declaracoes = await Promise.all(cnpjs.map(async c => {
+      const cnpjClean = c.cnpj.replace(/\D/g,'');
+      const adn   = adnMap[cnpjClean] || { rb_adn: 0, v_iss: 0, total_notas: 0 };
+      const decl  = declMap[cnpjClean] || {};
+      const rbt12 = await calcRbt12(cnpjClean);
+      const isMEI = regMap[cnpjClean] === 'mei';
+      const reg   = calcRegApurTribSN(rbt12, isMEI);
+
+      // Determina status
+      const div = Number(adn.rb_adn) - Number(decl.rb_declarada || 0);
+      let status = decl.status || 'pendente';
+      if (decl.rb_declarada !== undefined && decl.rb_declarada !== null) {
+        status = Math.abs(div) < 1 ? 'ok' : 'divergente';
+        if (decl.data_envio) status = Math.abs(div) < 1 ? 'enviado' : 'divergente';
+      }
+
+      return {
+        cnpj: cnpjClean,
+        nome: c.nome,
+        rbt12,
+        reg_apur_trib_sn: reg,
+        total_notas: Number(adn.total_notas || 0),
+        rb_adn: Number(adn.rb_adn || 0),
+        rb_declarada: Number(decl.rb_declarada || 0),
+        v_iss: Number(adn.v_iss || 0),
+        divergencia: div,
+        status,
+        data_envio: decl.data_envio,
+        observacao: decl.observacao,
+      };
+    }));
+
+    res.json({ sucesso: true, competencia, declaracoes });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ POST /api/pgdas/declaracoes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.post('/api/pgdas/declaracoes', authenticate, async (req, res) => {
+  try {
+    const { cnpj, competencia, rb_declarada, data_envio, observacao } = req.body;
+    if (!cnpj || !competencia) return res.status(400).json({ erro: 'cnpj e competencia sÃ£o obrigatÃ³rios' });
+
+    const cnpjClean = cnpj.replace(/\D/g,'');
+    const rAdn = await db.pool.query(
+      `SELECT COALESCE(SUM(v_serv),0) AS rb_adn FROM notas
+       WHERE prestador_cnpj=$1 AND competencia=$2 AND status NOT IN ('Cancelada','SubstituÃ­da')`,
+      [cnpjClean, competencia]
+    );
+    const rb_adn = Number(rAdn.rows[0]?.rb_adn || 0);
+    const div    = rb_adn - Number(rb_declarada || 0);
+    const status = Math.abs(div) < 1 ? (data_envio ? 'enviado' : 'ok') : 'divergente';
+
+    await db.pool.query(
+      `INSERT INTO pgdas_declaracoes (cnpj, competencia, rb_declarada, rb_adn, status, data_envio, observacao, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+       ON CONFLICT (cnpj, competencia) DO UPDATE SET
+         rb_declarada=$3, rb_adn=$4, status=$5, data_envio=$6, observacao=$7, updated_at=NOW()`,
+      [cnpjClean, competencia, Number(rb_declarada || 0), rb_adn, status, data_envio || null, observacao || null]
+    );
+
+    // Log de alerta se divergÃªncia acima de R$ 1
+    if (Math.abs(div) >= 1) {
+      await db.pool.query(
+        `INSERT INTO pgdas_alertas_log (cnpj, competencia, tipo_alerta, mensagem) VALUES ($1,$2,'divergencia',$3)`,
+        [cnpjClean, competencia, `DivergÃªncia de ${div.toFixed(2)} entre ADN e PGDAS-D`]
+      ).catch(() => {});
+    }
+
+    res.json({ sucesso: true, status, divergencia: div });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ GET /api/pgdas/reconciliacao â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.get('/api/pgdas/reconciliacao', authenticate, async (req, res) => {
+  try {
+    const competencia = req.query.competencia || new Date().toISOString().substring(0,7);
+    const cnpjs = await listarCnpjsAtivos(competencia);
+
+    const rAdn = await db.pool.query(
+      `SELECT prestador_cnpj AS cnpj,
+              COUNT(*) AS total_notas,
+              COALESCE(SUM(v_serv),0) AS rb_adn,
+              COALESCE(SUM(v_iss),0)  AS v_iss
+       FROM notas WHERE competencia=$1 AND status NOT IN ('Cancelada','SubstituÃ­da')
+       GROUP BY prestador_cnpj`,
+      [competencia]
+    );
+    const adnMap = Object.fromEntries(rAdn.rows.map(r => [r.cnpj, r]));
+
+    const rDecl = await db.pool.query(
+      `SELECT * FROM pgdas_declaracoes WHERE competencia=$1`,
+      [competencia]
+    ).catch(() => ({ rows: [] }));
+    const declMap = Object.fromEntries(rDecl.rows.map(r => [r.cnpj, r]));
+
+    const rReg = await db.pool.query('SELECT cnpj, regime FROM contribuinte_regime').catch(() => ({ rows: [] }));
+    const regMap = Object.fromEntries(rReg.rows.map(r => [r.cnpj, r.regime]));
+
+    let total_ok = 0, total_divergente = 0, rb_adn_total = 0, iss_total = 0;
+    const contribuintes = await Promise.all(cnpjs.map(async c => {
+      const cnpjClean = c.cnpj.replace(/\D/g,'');
+      const adn   = adnMap[cnpjClean] || { rb_adn: 0, v_iss: 0, total_notas: 0 };
+      const decl  = declMap[cnpjClean] || {};
+      const rbt12 = await calcRbt12(cnpjClean);
+      const isMEI = regMap[cnpjClean] === 'mei';
+      const reg   = calcRegApurTribSN(rbt12, isMEI);
+      const div   = Number(adn.rb_adn) - Number(decl.rb_declarada || 0);
+      const status = !decl.rb_declarada ? 'pendente' : Math.abs(div) < 1 ? (decl.data_envio ? 'enviado' : 'ok') : 'divergente';
+
+      rb_adn_total += Number(adn.rb_adn);
+      iss_total    += Number(adn.v_iss);
+      if (status === 'ok' || status === 'enviado') total_ok++;
+      else if (status === 'divergente') total_divergente++;
+
+      return { cnpj: cnpjClean, nome: c.nome, rbt12, reg_apur_trib_sn: reg,
+               total_notas: Number(adn.total_notas), rb_adn: Number(adn.rb_adn),
+               rb_declarada: Number(decl.rb_declarada || 0), v_iss: Number(adn.v_iss), status };
+    }));
+
+    res.json({
+      sucesso: true, competencia, contribuintes,
+      kpis: { total_contrib: cnpjs.length, total_ok, total_divergente,
+               rb_adn_total, iss_total },
+    });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ POST /api/pgdas/reconciliacao/:cnpj/:competencia â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.post('/api/pgdas/reconciliacao/:cnpj/:competencia', authenticate, async (req, res) => {
+  try {
+    const cnpjClean = req.params.cnpj.replace(/\D/g,'');
+    const competencia = req.params.competencia;
+
+    const rAdn = await db.pool.query(
+      `SELECT COALESCE(SUM(v_serv),0) AS rb_adn FROM notas
+       WHERE prestador_cnpj=$1 AND competencia=$2 AND status NOT IN ('Cancelada','SubstituÃ­da')`,
+      [cnpjClean, competencia]
+    );
+    const rb_adn = Number(rAdn.rows[0]?.rb_adn || 0);
+
+    const rDecl = await db.pool.query(
+      `SELECT rb_declarada FROM pgdas_declaracoes WHERE cnpj=$1 AND competencia=$2`,
+      [cnpjClean, competencia]
+    ).catch(() => ({ rows: [] }));
+
+    const rb_declarada = Number(rDecl.rows[0]?.rb_declarada || 0);
+    const div = rb_adn - rb_declarada;
+    const status = rb_declarada === 0 ? 'pendente' : Math.abs(div) < 1 ? 'ok' : 'divergente';
+
+    await db.pool.query(
+      `INSERT INTO pgdas_declaracoes (cnpj, competencia, rb_adn, rb_declarada, status, updated_at)
+       VALUES ($1,$2,$3,$4,$5,NOW())
+       ON CONFLICT (cnpj, competencia) DO UPDATE SET rb_adn=$3, status=$5, updated_at=NOW()`,
+      [cnpjClean, competencia, rb_adn, rb_declarada, status]
+    ).catch(() => {});
+
+    res.json({ sucesso: true, cnpj: cnpjClean, competencia, rb_adn, rb_declarada, divergencia: div, status });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ GET /api/pgdas/notas-pa â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.get('/api/pgdas/notas-pa', authenticate, async (req, res) => {
+  try {
+    const { cnpj, competencia } = req.query;
+    if (!cnpj || !competencia) return res.status(400).json({ erro: 'cnpj e competencia obrigatÃ³rios' });
+
+    const r = await db.pool.query(
+      `SELECT n_nfse, dh_emi, competencia, d_compet, tomador_nome, tomador_cnpj,
+              v_serv, v_iss, p_aliq, c_stat, status, tributos, chave_acesso
+       FROM notas
+       WHERE prestador_cnpj=$1 AND competencia=$2
+       ORDER BY dh_emi DESC`,
+      [cnpj.replace(/\D/g,''), competencia]
+    );
+    res.json({ sucesso: true, notas: r.rows });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ GET /api/pgdas/rbt12/:cnpj â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.get('/api/pgdas/rbt12/:cnpj', authenticate, async (req, res) => {
+  try {
+    const cnpj  = req.params.cnpj.replace(/\D/g,'');
+    const rbt12 = await calcRbt12(cnpj);
+    const isMEI = false; // TODO: integrar com registro de regime
+    const reg   = calcRegApurTribSN(rbt12, isMEI);
+    const sublimite = rbt12 >= 3_600_000;
+    res.json({ sucesso: true, cnpj, rbt12, reg_apur_trib_sn: reg,
+               sublimite, mensagem: sublimite
+                 ? 'ATENÃ‡ÃƒO: RBT12 â‰¥ R$ 3,6M â€” ISS deve ser recolhido via guia municipal'
+                 : 'Simples Nacional â€” ISS recolhido via DAS/PGDAS-D' });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ GET /api/pgdas/sublimites â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.get('/api/pgdas/sublimites', authenticate, async (req, res) => {
+  try {
+    // Retorna contribuintes prÃ³ximos ou acima do sublimite (R$ 3,2M - 4,8M)
+    const r = await db.pool.query(
+      `SELECT prestador_cnpj AS cnpj, prestador_nome AS nome,
+              COALESCE(SUM(v_serv),0) AS rbt12
+       FROM notas
+       WHERE dh_emi >= NOW() - INTERVAL '12 months'
+         AND status NOT IN ('Cancelada','SubstituÃ­da')
+       GROUP BY prestador_cnpj, prestador_nome
+       HAVING SUM(v_serv) >= 3200000
+       ORDER BY rbt12 DESC`
+    );
+    res.json({ sucesso: true, contribuintes: r.rows.map(row => ({
+      ...row, rbt12: Number(row.rbt12),
+      reg_apur_trib_sn: calcRegApurTribSN(Number(row.rbt12)),
+      alerta: Number(row.rbt12) >= 3_600_000 ? 'sublimite' : 'proximo',
+    })) });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ GET /api/pgdas/historico-arrecadacao â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.get('/api/pgdas/historico-arrecadacao', authenticate, async (req, res) => {
+  try {
+    const { ano, cnpj } = req.query;
+    let query = `SELECT * FROM arrecadacao_historico WHERE 1=1`;
+    const params = [];
+    if (ano)  { params.push(ano);  query += ` AND ano=$${params.length}`; }
+    if (cnpj) { params.push(cnpj.replace(/\D/g,'')); query += ` AND cnpj=$${params.length}`; }
+    query += ' ORDER BY ano DESC, competencia DESC';
+
+    const r = await db.pool.query(query, params).catch(() => ({ rows: [] }));
+    res.json({ sucesso: true, registros: r.rows });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ POST /api/pgdas/historico-arrecadacao/consolidar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.post('/api/pgdas/historico-arrecadacao/consolidar', authenticate, async (req, res) => {
+  try {
+    const { ano } = req.body;
+    if (!ano) return res.status(400).json({ erro: 'ano Ã© obrigatÃ³rio' });
+
+    // Agrupa notas por CNPJ/competÃªncia do ano solicitado
+    const r = await db.pool.query(
+      `SELECT prestador_cnpj AS cnpj, competencia, EXTRACT(YEAR FROM d_compet) AS ano,
+              COUNT(*) AS total_notas, COALESCE(SUM(v_serv),0) AS v_servico_bruto,
+              COALESCE(SUM(v_iss),0) AS v_iss_apurado,
+              COALESCE(SUM(CASE WHEN status='Cancelada' THEN 1 ELSE 0 END),0) AS total_cancelamentos,
+              COALESCE(SUM(CASE WHEN status='SubstituÃ­da' THEN 1 ELSE 0 END),0) AS total_substituicoes
+       FROM notas
+       WHERE EXTRACT(YEAR FROM d_compet) = $1
+       GROUP BY prestador_cnpj, competencia, EXTRACT(YEAR FROM d_compet)`,
+      [ano]
+    );
+
+    let inseridos = 0;
+    for (const row of r.rows) {
+      // Gera hash SHA-256 do registro para imutabilidade
+      const hashData = JSON.stringify({ cnpj: row.cnpj, competencia: row.competencia, v_iss: row.v_iss_apurado, ts: row.ano });
+      const hash = crypto.createHash('sha256').update(hashData).digest('hex');
+
+      await db.pool.query(
+        `INSERT INTO arrecadacao_historico
+           (cnpj, competencia, ano, total_notas, v_servico_bruto, v_iss_apurado, v_iss_liquido, hash_sha256)
+         VALUES ($1,$2,$3,$4,$5,$6,$6,$7)
+         ON CONFLICT (cnpj, competencia) DO NOTHING`,
+        [row.cnpj, row.competencia, Number(row.ano), Number(row.total_notas),
+         Number(row.v_servico_bruto), Number(row.v_iss_apurado), hash]
+      ).catch(() => {});
+      inseridos++;
+    }
+
+    res.json({ sucesso: true, ano, registros_consolidados: inseridos });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ GET /api/pgdas/nt-versoes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.get('/api/pgdas/nt-versoes', authenticate, async (req, res) => {
+  try {
+    const r = await db.pool.query('SELECT * FROM nt_versoes ORDER BY data_publicacao DESC NULLS LAST').catch(() => ({ rows: [] }));
+    res.json({ sucesso: true, versoes: r.rows });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ PUT /api/pgdas/nt-versoes/:codigo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.put('/api/pgdas/nt-versoes/:codigo', authenticate, async (req, res) => {
+  try {
+    const { status, implementado_em } = req.body;
+    await db.pool.query(
+      `UPDATE nt_versoes SET status=$1, implementado_em=$2 WHERE codigo=$3`,
+      [status, implementado_em || null, req.params.codigo]
+    );
+    res.json({ sucesso: true });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ GET /api/transmissao/queue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.get('/api/transmissao/queue', authenticate, async (req, res) => {
+  try {
+    const { status } = req.query;
+    let q = 'SELECT * FROM transmissao_queue';
+    const params = [];
+    if (status) { params.push(status); q += ` WHERE status=$1`; }
+    q += ' ORDER BY criado_em DESC LIMIT 100';
+    const r = await db.pool.query(q, params).catch(() => ({ rows: [] }));
+    res.json({ sucesso: true, itens: r.rows });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ POST /api/transmissao/reprocessar/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.post('/api/transmissao/reprocessar/:id', authenticate, async (req, res) => {
+  try {
+    await db.pool.query(
+      `UPDATE transmissao_queue SET status='pendente', tentativas=0, proxima_tentativa=NOW(), ultimo_erro=NULL WHERE id=$1`,
+      [req.params.id]
+    );
+    res.json({ sucesso: true });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ GET /api/municipio/cert-status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.get('/api/municipio/cert-status', authenticate, async (req, res) => {
+  try {
+    const config = await db.getConfig();
+    if (!config.cert_not_after) {
+      return res.json({ sucesso: true, status: 'sem_cert', mensagem: 'Nenhum certificado digital carregado.' });
+    }
+    const expiry = new Date(config.cert_not_after);
+    const hoje   = new Date();
+    const diasRestantes = Math.ceil((expiry - hoje) / (1000 * 60 * 60 * 24));
+
+    let nivel = 'ok';
+    if (diasRestantes <= 0)  nivel = 'vencido';
+    else if (diasRestantes <= 7)  nivel = 'critico';
+    else if (diasRestantes <= 15) nivel = 'alerta';
+    else if (diasRestantes <= 30) nivel = 'aviso';
+
+    res.json({
+      sucesso: true, status: nivel,
+      dias_restantes: diasRestantes,
+      data_vencimento: expiry.toISOString(),
+      cert_subject: config.cert_subject,
+      mensagem: nivel === 'ok' ? `Certificado vÃ¡lido por ${diasRestantes} dias`
+              : nivel === 'vencido' ? 'CERTIFICADO VENCIDO â€” renove imediatamente!'
+              : `âš ï¸ Certificado vence em ${diasRestantes} dia(s)`,
+    });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ==========================================
+// PGDAS-D Import
+// ==========================================
+import { parsePgdas } from './pgdas-parser.js';
+
+// â”€â”€ POST /api/pgdas/importar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Body: { nome_arquivo, content (base64), codTOM }
+app.post('/api/pgdas/importar', authenticate, async (req, res) => {
+  const { nome_arquivo, content, codTOM } = req.body || {};
+
+  if (!content) return res.status(400).json({ erro: 'Campo "content" (base64) Ã© obrigatÃ³rio.' });
+  if (!codTOM)  return res.status(400).json({ erro: 'Campo "codTOM" Ã© obrigatÃ³rio.' });
+
+  let buffer;
+  try {
+    buffer = Buffer.from(content, 'base64');
+  } catch {
+    return res.status(400).json({ erro: 'Content invÃ¡lido â€” use Base64.' });
+  }
+
+  let parsed;
+  try {
+    parsed = parsePgdas(buffer, { codTOM: String(codTOM).padStart(4, '0') });
+  } catch (err) {
+    return res.status(500).json({ erro: `Falha ao parsear arquivo: ${err.message}` });
+  }
+
+  if (parsed.erros.length && !parsed.resultado.length) {
+    return res.status(422).json({ erro: parsed.erros.join('; '), detalhes: parsed.erros });
+  }
+
+  const usuario = req.user?.login || 'sistema';
+  let importados = 0;
+
+  try {
+    // Registra a importaÃ§Ã£o
+    const { rows: [imp] } = await db.pool.query(
+      `INSERT INTO pgdas_importacoes
+         (nome_arquivo, cod_tom, total_registros, retidos_malha, impedidos_iss,
+          retificacoes, importado_por)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [nome_arquivo || 'upload', codTOM, parsed.totais.total,
+       parsed.totais.retidos_malha, parsed.totais.impedidos_iss,
+       parsed.totais.retificacoes, usuario]
+    );
+    const importacaoId = imp.id;
+
+    // Upsert de cada declaraÃ§Ã£o
+    for (const r of parsed.resultado) {
+      if (!r.cnpj || !r.competencia) continue;
+
+      await db.pool.query(
+        `INSERT INTO pgdas_declaracoes
+           (cnpj, competencia, rbt12_oficial, v_iss_declarado, retido_malha,
+            impedido_iss, operacao, v_receita_pa, cod_tom_municipio,
+            fonte_importacao, status, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+           CASE WHEN $5 THEN 'malha' ELSE 'importado' END, NOW())
+         ON CONFLICT (cnpj, competencia) DO UPDATE SET
+           rbt12_oficial       = EXCLUDED.rbt12_oficial,
+           v_iss_declarado     = EXCLUDED.v_iss_declarado,
+           retido_malha        = EXCLUDED.retido_malha,
+           impedido_iss        = EXCLUDED.impedido_iss,
+           operacao            = EXCLUDED.operacao,
+           v_receita_pa        = EXCLUDED.v_receita_pa,
+           cod_tom_municipio   = EXCLUDED.cod_tom_municipio,
+           fonte_importacao    = EXCLUDED.fonte_importacao,
+           status              = CASE
+             WHEN EXCLUDED.retido_malha THEN 'malha'
+             WHEN ABS(COALESCE(pgdas_declaracoes.rb_adn,0) - EXCLUDED.v_receita_pa) > 10
+               THEN 'divergente'
+             ELSE 'importado'
+           END,
+           updated_at          = NOW()`,
+        [r.cnpj, r.competencia, r.rbt12, r.v_iss_municipio,
+         r.retido_malha, r.impedido_iss, r.operacao, r.v_receita_pa,
+         codTOM, importacaoId]
+      );
+      importados++;
+
+      // Se ImpedidoIcmsIss â†’ atualiza regime do contribuinte
+      if (r.impedido_iss) {
+        await db.pool.query(
+          `UPDATE contribuintes SET reg_apur_trib_sn = '2'
+           WHERE cnpj = $1 AND (reg_apur_trib_sn IS NULL OR reg_apur_trib_sn <> '2')`,
+          [r.cnpj]
+        ).catch(() => {});
+      }
+    }
+
+    // Atualiza o log com o total real importado
+    await db.pool.query(
+      `UPDATE pgdas_importacoes SET importados = $1, status = 'ok' WHERE id = $2`,
+      [importados, importacaoId]
+    );
+
+    res.json({
+      sucesso: true,
+      importados,
+      total_arquivo: parsed.totais.total,
+      retidos_malha: parsed.totais.retidos_malha,
+      impedidos_iss: parsed.totais.impedidos_iss,
+      retificacoes:  parsed.totais.retificacoes,
+      versao_layout: parsed.versao,
+      avisos:        parsed.erros,
+    });
+
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// â”€â”€ GET /api/pgdas/importacoes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.get('/api/pgdas/importacoes', authenticate, async (req, res) => {
+  try {
+    const { rows } = await db.pool.query(
+      `SELECT id, nome_arquivo, data_arquivo, cod_tom,
+              total_registros, importados, retidos_malha, impedidos_iss,
+              retificacoes, status, mensagem, importado_por,
+              importado_em
+       FROM pgdas_importacoes
+       ORDER BY importado_em DESC
+       LIMIT 50`
+    );
+    res.json({ sucesso: true, importacoes: rows });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ==========================================
+// Proxy â€” ServiÃ§o de IA (Python / FastAPI)
+// ==========================================
+
+app.use('/api/ia', authenticate, async (req, res) => {
+  try {
+    const url      = `${IA_URL}/api/ia${req.path}`;
+    const response = await axios({
+      method:         req.method,
+      url,
+      params:         req.query,
+      data:           req.body,
+      validateStatus: () => true,
+      timeout:        30_000,
+    });
+    res.status(response.status).json(response.data);
+  } catch (err) {
+    res.status(503).json({
+      error:  'ServiÃ§o de IA indisponÃ­vel',
+      detail: err.message,
+      dica:   'Execute src/ia/start.bat ou python src/ia/main.py para iniciar o microserviÃ§o.',
+    });
+  }
+});
+
+// ==========================================
 // Startup
 // ==========================================
 
+// â”€â”€ Gerenciamento do MicroserviÃ§o Python de IA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+let _iaProc = null; // referÃªncia ao processo filho
+
+/**
+ * Verifica se o serviÃ§o de IA jÃ¡ estÃ¡ respondendo na porta configurada.
+ * Retorna true se estiver no ar, false caso contrÃ¡rio.
+ */
+async function _iaOnline() {
+  try {
+    const res = await axios.get(`${IA_URL}/api/ia/status`, { timeout: 2_000, validateStatus: () => true });
+    return res.status === 200;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Monta o PATH completo do sistema (Machine + User) para garantir que
+ * o Python seja encontrado mesmo quando o processo Node foi iniciado
+ * sem o PATH atualizado.
+ */
+function _fullSystemPath() {
+  if (process.platform !== 'win32') return process.env.PATH || '';
+  try {
+    const machine = spawnSync('powershell', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      '[System.Environment]::GetEnvironmentVariable("Path","Machine")',
+    ], { encoding: 'utf8', timeout: 5000 }).stdout?.trim() || '';
+
+    const user = spawnSync('powershell', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      '[System.Environment]::GetEnvironmentVariable("Path","User")',
+    ], { encoding: 'utf8', timeout: 5000 }).stdout?.trim() || '';
+
+    return [machine, user, process.env.PATH || ''].filter(Boolean).join(';');
+  } catch {
+    return process.env.PATH || '';
+  }
+}
+
+/**
+ * Encontra o executÃ¡vel Python disponÃ­vel no sistema.
+ * Usa PATH completo do sistema + caminhos absolutos conhecidos como fallback.
+ */
+async function _findPython() {
+  const { execFile } = await import('child_process');
+  const { promisify } = await import('util');
+  const exec = promisify(execFile);
+
+  const fullPath = _fullSystemPath();
+  const env = { ...process.env, PATH: fullPath };
+
+  // Candidatos por nome (PATH atualizado)
+  const nameCandidates = process.platform === 'win32'
+    ? ['python', 'py', 'python3']
+    : ['python3', 'python'];
+
+  // Caminhos absolutos conhecidos (Windows) â€” fallback se PATH falhar
+  const absCandidates = process.platform === 'win32' ? [
+    `${process.env.LOCALAPPDATA}\\Programs\\Python\\Python313\\python.exe`,
+    `${process.env.LOCALAPPDATA}\\Programs\\Python\\Python312\\python.exe`,
+    `${process.env.LOCALAPPDATA}\\Programs\\Python\\Python311\\python.exe`,
+    `${process.env.LOCALAPPDATA}\\Programs\\Python\\Python310\\python.exe`,
+    `${process.env.LOCALAPPDATA}\\Programs\\Python\\Python39\\python.exe`,
+    'C:\\Python313\\python.exe',
+    'C:\\Python312\\python.exe',
+    'C:\\Python311\\python.exe',
+    'C:\\Python310\\python.exe',
+  ] : [];
+
+  // Primeiro tenta por nome com PATH completo
+  for (const cmd of nameCandidates) {
+    try {
+      const result = await exec(cmd, ['--version'], { env, timeout: 5000 });
+      return { cmd, env };
+    } catch { /* tenta o prÃ³ximo */ }
+  }
+
+  // Depois tenta caminhos absolutos
+  for (const abs of absCandidates) {
+    if (!fsSync.existsSync(abs)) continue;
+    try {
+      await exec(abs, ['--version'], { timeout: 5000 });
+      return { cmd: abs, env };
+    } catch { /* tenta o prÃ³ximo */ }
+  }
+
+  return null;
+}
+
+/**
+ * Aguarda o serviÃ§o de IA responder com polling, atÃ© o timeout.
+ */
+async function _waitForIa(timeoutMs = 30_000, intervalMs = 1_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await _iaOnline()) return true;
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  return false;
+}
+
+/**
+ * Inicia o microserviÃ§o Python de IA automaticamente.
+ * - Se jÃ¡ estiver rodando: apenas confirma e nÃ£o spawn novo processo.
+ * - Se nÃ£o estiver: localiza Python, instala deps e sobe o serviÃ§o.
+ * - Em caso de crash: reinicia automaticamente atÃ© 3 vezes.
+ */
+async function startIaService(attempt = 1) {
+  const MAX_ATTEMPTS = 3;
+  const iaDir    = path.join(__dirname, 'ia');
+  const iaScript = path.join(iaDir, 'main.py');
+  const reqFile  = path.join(iaDir, 'requirements.txt');
+
+  if (!fsSync.existsSync(iaScript)) {
+    console.warn('[ IA ] main.py nÃ£o encontrado â€” mÃ³dulo de IA desativado.');
+    return;
+  }
+
+  // Verifica se jÃ¡ estÃ¡ no ar (ex: iniciado externamente ou reinÃ­cio do Node)
+  if (await _iaOnline()) {
+    console.log(`[ IA ] ServiÃ§o jÃ¡ estÃ¡ ativo na porta ${IA_PORT} âœ“`);
+    return;
+  }
+
+  const pythonResult = await _findPython();
+  if (!pythonResult) {
+    console.warn('[ IA ] Python nÃ£o encontrado. Instale Python 3.9+ e adicione ao PATH.');
+    console.warn('[ IA ]   Download: https://www.python.org/downloads/');
+    return;
+  }
+  const { cmd: python, env: pythonEnv } = pythonResult;
+
+  console.log(`[ IA ] Iniciando microserviÃ§o Python (tentativa ${attempt}/${MAX_ATTEMPTS})...`);
+
+  // Ambiente completo para o processo filho (PATH do sistema + flags UTF-8)
+  const childEnv = {
+    ...pythonEnv,
+    PYTHONUTF8:       '1',
+    PYTHONIOENCODING: 'utf-8',
+  };
+
+  // Instala dependÃªncias silenciosamente na primeira tentativa
+  if (attempt === 1 && fsSync.existsSync(reqFile)) {
+    try {
+      const { execFile } = await import('child_process');
+      const { promisify } = await import('util');
+      await promisify(execFile)(python, ['-m', 'pip', 'install', '-r', reqFile, '--quiet'], {
+        timeout: 120_000,
+        env: childEnv,
+      });
+      console.log('[ IA ] DependÃªncias Python verificadas âœ“');
+    } catch (e) {
+      console.warn(`[ IA ] Aviso ao instalar deps: ${e.message}`);
+    }
+  }
+
+  // Spawna o processo Python com o ambiente completo
+  _iaProc = spawn(python, [iaScript], {
+    cwd:   iaDir,
+    stdio: 'pipe',
+    env:   childEnv,
+  });
+
+  _iaProc.stdout.on('data', d => process.stdout.write(`[ IA ] ${d}`));
+  _iaProc.stderr.on('data', d => {
+    const msg = d.toString();
+    // Suprime o aviso de porta em uso (esperado se jÃ¡ estava rodando)
+    if (!msg.includes('10048') && !msg.includes('address already in use')) {
+      process.stderr.write(`[ IA ] ${msg}`);
+    }
+  });
+
+  _iaProc.on('error', err => {
+    console.warn(`[ IA ] Erro ao iniciar processo: ${err.message}`);
+  });
+
+  _iaProc.on('exit', (code, signal) => {
+    _iaProc = null;
+    if (code === 1 && attempt === 1) {
+      // Porta ocupada na primeira tentativa â€” serviÃ§o jÃ¡ estava rodando
+      console.log('[ IA ] ServiÃ§o jÃ¡ estava ativo em outra instÃ¢ncia âœ“');
+      return;
+    }
+    if (code !== 0 && signal !== 'SIGTERM' && attempt < MAX_ATTEMPTS) {
+      console.warn(`[ IA ] Processo encerrado (code=${code}). Reiniciando em 5s...`);
+      setTimeout(() => startIaService(attempt + 1), 5_000);
+    } else if (code !== 0) {
+      console.warn(`[ IA ] ServiÃ§o de IA encerrado apÃ³s ${attempt} tentativas. Reinicie manualmente: src/ia/start.bat`);
+    }
+  });
+
+  // Aguarda o serviÃ§o ficar pronto (atÃ© 30s)
+  const pronto = await _waitForIa(30_000);
+  if (pronto) {
+    console.log(`[ IA ] MicroserviÃ§o de InteligÃªncia Fiscal ativo na porta ${IA_PORT} âœ“`);
+  } else {
+    console.warn(`[ IA ] ServiÃ§o nÃ£o respondeu em 30s â€” verificar logs acima.`);
+  }
+}
+
+// Encerra o processo filho ao desligar o Node
+process.on('exit',    () => _iaProc?.kill());
+process.on('SIGINT',  () => { _iaProc?.kill(); process.exit(0); });
+process.on('SIGTERM', () => { _iaProc?.kill(); process.exit(0); });
+
 app.listen(PORT, () => {
   console.log(`[ Freire ] Backend ativo na porta ${PORT} (${NODE_ENV})`);
+  startIaService();
 });
+

@@ -40,26 +40,26 @@ export function renderGestaoAcessosMun(container) {
       <div class="card-body">
         <div class="grid grid-3 gap-4 mb-4">
           <div class="form-group">
-            <label class="form-label">CPF</label>
+            <label class="form-label">CPF <span class="required">*</span></label>
             <input type="text" class="form-input form-input-mono" id="mun-novo-cpf" placeholder="000.000.000-00" maxlength="14">
           </div>
           <div class="form-group">
-            <label class="form-label">Nome</label>
+            <label class="form-label">Nome <span class="required">*</span></label>
             <input type="text" class="form-input" id="mun-novo-nome">
           </div>
           <div class="form-group">
-            <label class="form-label">Papel</label>
+            <label class="form-label">Papel <span class="required">*</span></label>
             <select class="form-select" id="mun-novo-role">
               ${BASE_ROLES.map(r => `<option value="${r.value}">${r.label}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">E-mail <span class="text-danger">*</span></label>
-            <input type="email" class="form-input" id="mun-novo-email" placeholder="usuario@municipio.gov.br" required>
+            <label class="form-label">E-mail <span class="required">*</span></label>
+            <input type="email" class="form-input" id="mun-novo-email" placeholder="usuario@municipio.gov.br">
           </div>
           <div class="form-group">
-            <label class="form-label">Celular <span class="text-danger">*</span></label>
-            <input type="tel" class="form-input form-input-mono" id="mun-novo-celular" placeholder="(00) 00000-0000" maxlength="16" required>
+            <label class="form-label">Celular <span class="required">*</span></label>
+            <input type="tel" class="form-input form-input-mono" id="mun-novo-celular" placeholder="(00) 00000-0000" maxlength="16">
           </div>
         </div>
         <div style="text-align: right;">

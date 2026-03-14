@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arquitetura Completa — Sistema NFS-e ADN Padrão Nacional</title>
+<style>
+  :root {
+    --bg:     #ffffff;
+    --bg2:    #f7f6f2;
+    --bg3:    #eeecea;
+    --text:   #1a1a18;
+    --muted:  #73726c;
+    --border: rgba(0,0,0,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:     #1a1a18;
+      --bg2:    #252522;
+      --bg3:    #2e2e2a;
+      --text:   #e0dfd5;
+      --muted:  #9c9a92;
+      --border: rgba(255,255,255,0.10);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 24px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  /* PAGE HEADER */
+  .page-header {
+    background: #EEEDFE;
+    border: 1px solid #534AB7;
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin-bottom: 32px;
+  }
+  .page-header h1 { font-size: 17px; font-weight: 700; color: #26215C; }
+  .page-header p  { font-size: 12px; color: #534AB7; margin-top: 5px; }
+  @media (prefers-color-scheme: dark) {
+    .page-header { background: #2E2A6A; border-color: #7F77DD; }
+    .page-header h1 { color: #CECBF6; }
+    .page-header p  { color: #AFA9EC; }
+  }
+
+  /* SECTION */
+  .section { margin-bottom: 30px; }
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+    padding-left: 2px;
+  }
+
+  /* FLOW ROW */
+  .flow-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    font-size: 18px;
+    color: var(--muted);
+    padding: 0 2px;
+  }
+  .flow-box {
+    flex: 1;
+    min-width: 110px;
+    border-radius: 8px;
+    padding: 10px 13px;
+    border: 1px solid transparent;
+  }
+  .flow-box .lbl { font-size: 13px; font-weight: 600; }
+  .flow-box .sub { font-size: 11px; margin-top: 3px; }
+
+  /* CARD GRID */
+  .card-grid {
+    display: grid;
+    gap: 10px;
+  }
+  .card-grid.c2 { grid-template-columns: repeat(2, 1fr); }
+  .card-grid.c3 { grid-template-columns: repeat(3, 1fr); }
+  .card-grid.c4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 600px) {
+    .card-grid.c3, .card-grid.c4 { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* COLOR THEMES */
+  .blue   { background:#E6F1FB; border-color:#185FA5 !important; }
+  .blue   .lbl { color:#0C447C; } .blue   .sub { color:#185FA5; }
+  .teal   { background:#E1F5EE; border-color:#0F6E56 !important; }
+  .teal   .lbl { color:#085041; } .teal   .sub { color:#0F6E56; }
+  .green  { background:#EAF3DE; border-color:#3B6D11 !important; }
+  .green  .lbl { color:#27500A; } .green  .sub { color:#3B6D11; }
+  .amber  { background:#FAEEDA; border-color:#854F0B !important; }
+  .amber  .lbl { color:#633806; } .amber  .sub { color:#854F0B; }
+  .stone  { background:#F1EFE8; border-color:#888780 !important; }
+  .stone  .lbl { color:#444441; } .stone  .sub { color:#888780; }
+  .coral  { background:#FAECE7; border-color:#993C1D !important; }
+  .coral  .lbl { color:#712B13; } .coral  .sub { color:#993C1D; }
+  .purple { background:#EEEDFE; border-color:#534AB7 !important; }
+  .purple .lbl { color:#3C3489; } .purple .sub { color:#534AB7; }
+  .red    { background:#FCEBEB; border-color:#A32D2D !important; }
+  .red    .lbl { color:#791F1F; } .red    .sub { color:#A32D2D; }
+
+  @media (prefers-color-scheme: dark) {
+    .blue   { background:#0C447C; border-color:#378ADD !important; }
+    .blue   .lbl { color:#B5D4F4; } .blue   .sub { color:#85B7EB; }
+    .teal   { background:#085041; border-color:#1D9E75 !important; }
+    .teal   .lbl { color:#9FE1CB; } .teal   .sub { color:#5DCAA5; }
+    .green  { background:#27500A; border-color:#639922 !important; }
+    .green  .lbl { color:#C0DD97; } .green  .sub { color:#97C459; }
+    .amber  { background:#633806; border-color:#BA7517 !important; }
+    .amber  .lbl { color:#FAC775; } .amber  .sub { color:#EF9F27; }
+    .stone  { background:#3a3a37; border-color:#888780 !important; }
+    .stone  .lbl { color:#D3D1C7; } .stone  .sub { color:#B4B2A9; }
+    .coral  { background:#712B13; border-color:#D85A30 !important; }
+    .coral  .lbl { color:#F5C4B3; } .coral  .sub { color:#F0997B; }
+    .purple { background:#3C3489; border-color:#7F77DD !important; }
+    .purple .lbl { color:#CECBF6; } .purple .sub { color:#AFA9EC; }
+    .red    { background:#791F1F; border-color:#E24B4A !important; }
+    .red    .lbl { color:#F7C1C1; } .red    .sub { color:#F09595; }
+  }
+
+  /* NOTE STRIP */
+  .note {
+    font-size: 11px;
+    color: var(--muted);
+    border-left: 2px dashed var(--border);
+    padding: 4px 10px;
+    margin-top: 8px;
+  }
+
+  /* TABLE PANEL */
+  .panel {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg2);
+  }
+  .panel-row {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 14px;
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--border);
+    align-items: baseline;
+  }
+  .panel-row:last-child { border-bottom: none; }
+  .panel-row.full       { grid-template-columns: 1fr; }
+  .panel-row .k { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .panel-row .v { font-size: 12px; color: var(--text); }
+  .panel-row .v.warn { color: #854F0B; font-style: italic; }
+  @media (prefers-color-scheme: dark) {
+    .panel-row .v.warn { color: #EF9F27; }
+  }
+  code {
+    font-family: 'Courier New', monospace;
+    font-size: 11.5px;
+    background: var(--bg3);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  /* FOOTER */
+  .page-footer {
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- PAGE HEADER -->
+<div class="page-header">
+  <h1>Arquitetura Completa — Sistema NFS-e ADN Padrão Nacional</h1>
+  <p>NT 007/2026 &nbsp;·&nbsp; NT 2026.001 &nbsp;·&nbsp; Manual Contribuintes v1.2 &nbsp;·&nbsp; Resolução CGNFS-e nº 3/2023 &nbsp;·&nbsp; LC 214/2025</p>
+</div>
+
+<!-- ═══ 1. FLUXO CENTRAL ═══ -->
+<div class="section">
+  <div class="section-label">1. Fluxo central de emissão</div>
+  <div class="flow-row">
+    <div class="flow-box blue">
+      <div class="lbl">Emitente</div>
+      <div class="sub">DPS (XML assinado ICP-Brasil)</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box teal">
+      <div class="lbl">Sefin / validação</div>
+      <div class="sub">Regras de negócio municipais</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box green">
+      <div class="lbl">NFS-e autorizada</div>
+      <div class="sub">Chave de acesso 50 dígitos</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box amber">
+      <div class="lbl">ADN</div>
+      <div class="sub">Repositório nacional · NSU</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box stone">
+      <div class="lbl">DANFSe</div>
+      <div class="sub">PDF · QR Code · compartilhamento</div>
+    </div>
+  </div>
+  <div class="note">↩ Rejeição em qualquer dos dois pontos (sistema municipal ou ADN) → ajuste na DPS e reenvio com a mesma série + número</div>
+</div>
+
+<!-- ═══ 2. CICLO DE VIDA ═══ -->
+<div class="section">
+  <div class="section-label">2. Ciclo de vida — eventos obrigatórios</div>
+  <div class="card-grid c4">
+    <div class="flow-box coral">
+      <div class="lbl">Cancelamento</div>
+      <div class="sub">Automático · por ofício · análise fiscal · irreversível após processamento</div>
+    </div>
+    <div class="flow-box coral">
+      <div class="lbl">Substituição</div>
+      <div class="sub">Nova DPS · prazo até 730 dias · substitui sem cancelar a original</div>
+    </div>
+    <div class="flow-box purple">
+      <div class="lbl">Manifestação</div>
+      <div class="sub">Confirmação · Rejeição · Desconhecimento · Manifestação tácita</div>
+    </div>
+    <div class="flow-box amber">
+      <div class="lbl">Bloqueio / Desbloqueio</div>
+      <div class="sub">Por ofício da Administração Tributária Municipal (ATM)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 3. ENDPOINTS API ═══ -->
+<div class="section">
+  <div class="section-label">3. Endpoints essenciais da API REST (ADN / Sefin)</div>
+  <div class="panel">
+    <div class="panel-row">
+      <span class="k">Emissão</span>
+      <span class="v"><code>POST /nfse</code> — Gera NFS-e a partir da DPS · síncrono · retorno imediato com autorização ou rejeição</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Consulta NFS-e</span>
+      <span class="v"><code>GET /nfse/{chaveAcesso}</code> — Retorna XML completo comprimido (GZip) em Base64</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Consulta DPS</span>
+      <span class="v"><code>HEAD /dps/{id}</code> — Verifica se DPS já foi autorizada · base da estratégia de idempotência</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Eventos (escrita)</span>
+      <span class="v"><code>POST /nfse/{chave}/eventos</code> — Cancelamento · substituição · manifestação · vinculação de pagamento</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Eventos (leitura)</span>
+      <span class="v"><code>GET /nfse/{chave}/eventos</code> — Lista histórico de eventos por tipo e número de sequência</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">DANFSe</span>
+      <span class="v"><code>GET /danfse/{chaveAcesso}</code> — PDF auxiliar formatado para compartilhamento com o tomador</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Distribuição DF-e</span>
+      <span class="v"><code>GET /DFe/{NSU}</code> — Lotes de até 50 documentos · NSU sequencial · polling do tomador</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Parâmetros municipais</span>
+      <span class="v"><code>GET /parametros_municipais/{codigoMunicipio}</code> — Alíquotas · regimes especiais · retenções · benefícios fiscais</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 4. PARAMETRIZAÇÃO MUNICIPAL ═══ -->
+<div class="section">
+  <div class="section-label">4. Parametrização municipal dinâmica</div>
+  <div class="card-grid c3">
+    <div class="flow-box teal">
+      <div class="lbl">Alíquotas por CTISS</div>
+      <div class="sub">Consultadas via <code>/parametros_municipais</code> antes de cada emissão</div>
+    </div>
+    <div class="flow-box teal">
+      <div class="lbl">Regimes especiais</div>
+      <div class="sub">SPL · cooperativa · autônomo · PROEMP · imunidades e isenções</div>
+    </div>
+    <div class="flow-box teal">
+      <div class="lbl">Cache com TTL</div>
+      <div class="sub">Parâmetros cacheados (4–24h) · invalidação automática via notificação do PAM</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 5. SPLIT PAYMENT ═══ -->
+<div class="section">
+  <div class="section-label">5. Split Payment — NT 2026.001 &nbsp;(preparatório 2026 · efetivo a partir de 2027)</div>
+  <div class="card-grid c3" style="margin-bottom:10px">
+    <div class="flow-box red">
+      <div class="lbl">Pagamento antes do DFe</div>
+      <div class="sub">DFe deve conter grupo de vinculação mesmo quando pagamento já ocorreu</div>
+    </div>
+    <div class="flow-box red">
+      <div class="lbl">Evento de vinculação</div>
+      <div class="sub">Código <strong>110300</strong> · assinado com CNPJ base do emitente</div>
+    </div>
+    <div class="flow-box red">
+      <div class="lbl">Cancelamento de vínculo</div>
+      <div class="sub">Código <strong>110310</strong> · anula o vínculo do pagamento anterior</div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-row">
+      <span class="k">tpMeioPgto</span>
+      <span class="v">Pix · Boleto · TED/DOC · Cartão · Cheque · Outros — conforme tabela nacional IT 2026.001</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Erros comuns</span>
+      <span class="v">Código <code>1001</code> — CNPJ de pagamento inválido &nbsp;·&nbsp; Código <code>1003</code> — tipo de pagamento não permitido</span>
+    </div>
+    <div class="panel-row full">
+      <span class="v warn">⚠ Em 2026 os campos são preparatórios e sem efeito regulatório. Obrigatoriedade de segregação do tributo definida pelo Comitê Gestor do IBS e RFB.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 6. RESILIÊNCIA ═══ -->
+<div class="section">
+  <div class="section-label">6. Resiliência, idempotência e observabilidade</div>
+  <div class="panel">
+    <div class="panel-row">
+      <span class="k">Idempotência</span>
+      <span class="v">Chave: <code>idDps + CNPJ + série + número</code> — previne dupla autorização em cenários de retry</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Retry</span>
+      <span class="v">Backoff exponencial com jitter aleatório · circuit breaker após 3 falhas consecutivas · fila de reprocessamento assíncrona</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Webhooks</span>
+      <span class="v">Recepção proativa de DF-e e eventos pelo tomador — substitui polling contínuo dos endpoints</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Cache</span>
+      <span class="v">Parâmetros municipais com TTL configurável (4–24h) + invalidação event-driven — alíquotas raramente mudam</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Observabilidade</span>
+      <span class="v">Logs estruturados JSON (<code>traceId · spanId · cnpj · evento · latência</code>) · OpenTelemetry · alertas P1/P2 automáticos</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">TLS / mTLS</span>
+      <span class="v">TLS 1.2+ obrigatório · mTLS para integrações B2G · certificado ICP-Brasil e-CNPJ obrigatório para DPS</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 7. NUMERAÇÃO ═══ -->
+<div class="section">
+  <div class="section-label">7. Numeração, série e regras de controle</div>
+  <div class="panel">
+    <div class="panel-row">
+      <span class="k">Série</span>
+      <span class="v">Exclusivamente numérica a partir de 01/01/2026 — série alfanumérica aceita apenas para competências ≤ dez/2025</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Pulos de NSU</span>
+      <span class="v">Decorrem de falhas técnicas ou concorrência no ADN — não geram inconsistência contábil e não devem causar rejeição no sistema receptor</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Arredondamento</span>
+      <span class="v">Half-even (bancário) obrigatório para PIS/COFINS desde NT 007/2026 — tolerância de R$ 0,01 no motor de cálculo</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Imutabilidade</span>
+      <span class="v">NFS-e autorizada não pode ser alterada — apenas cancelada (irreversível) ou substituída por nova DPS</span>
+    </div>
+    <div class="panel-row">
+      <span class="k">Prefixos de erro</span>
+      <span class="v">Prefixo <code>E</code> — erros originados no ADN nacional &nbsp;·&nbsp; Prefixo <code>X</code> — erros originados no sistema municipal (vigência 01/01/2026)</span>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="page-footer">
+  NT 007/2026 &nbsp;·&nbsp; NT 2026.001 &nbsp;·&nbsp; Manual Contribuintes NFS-e v1.2 out/2025 &nbsp;·&nbsp; Resolução CGNFS-e nº 3/2023 &nbsp;·&nbsp; LC 214/2025 &nbsp;·&nbsp; Março/2026
+</div>
+
+</body>
+</html>
